@@ -67,19 +67,24 @@ export default function StockPage() {
     try {
       const sb = supabase
 
-      // Stock summary + photos
-      const [summaryRes, photosRes, ventesRes] = await Promise.all([
+      // Stock summary
+      const [summaryRes, ventesRes] = await Promise.all([
         sb.from('revente_stock_summary').select('*').order('produit'),
-        sb.from('revente_stock').select('id, photo_url'),
         sb.from('revente_ventes').select('prix_achat_unitaire, prix_revente_unitaire, qte_vendue, date_vente'),
       ])
 
       if (summaryRes.error) throw summaryRes.error
-      if (photosRes.error) throw photosRes.error
       if (ventesRes.error) throw ventesRes.error
 
-      // Fusionner photo_url dans les items du summary
-      const photos = photosRes.data ?? []
+      // Photos (colonne photo_url peut ne pas exister — on ignore l'erreur)
+      let photos = []
+      try {
+        const { data } = await sb.from('revente_stock').select('id, photo_url')
+        photos = data ?? []
+      } catch {
+        // photo_url n'existe pas encore en base
+      }
+
       const items = (summaryRes.data ?? []).map((item) => ({
         ...item,
         photo_url: photos.find((p) => p.id === item.id)?.photo_url ?? null,
@@ -107,8 +112,8 @@ export default function StockPage() {
 
       setMetrics({ totalStockValue, totalBenefit, totalSales: ventes.length, monthSales })
     } catch (err) {
-      console.error(err)
-      toast.error('Erreur lors du chargement du stock')
+      console.error('Erreur chargement stock:', err)
+      toast.error(err?.message || 'Erreur lors du chargement du stock')
     } finally {
       setLoading(false)
     }
