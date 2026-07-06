@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/router'
-import { supabase } from '../lib/supabaseClient'
+import { getSupabaseClient } from '../lib/supabaseClient'
 
 export default function AuthGuard({ children }) {
   const router = useRouter()
@@ -13,7 +13,7 @@ export default function AuthGuard({ children }) {
     const checkSession = async () => {
       const {
         data: { session },
-      } = await supabase.auth.getSession()
+      } = await getSupabaseClient().auth.getSession()
 
       if (cancelled) return
 
@@ -29,7 +29,7 @@ export default function AuthGuard({ children }) {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = getSupabaseClient().auth.onAuthStateChange((_event, session) => {
       if (cancelled) return
 
       if (session) {

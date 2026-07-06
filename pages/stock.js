@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { supabase } from '../lib/supabaseClient'
+import { getSupabaseClient } from '../lib/supabaseClient'
 import AuthGuard from '../components/AuthGuard'
 import Layout from '../components/Layout'
 import StockModal from '../components/StockModal'
@@ -39,8 +39,10 @@ export default function StockPage() {
   const fetchData = useCallback(async () => {
     setLoading(true)
     try {
+      const sb = getSupabaseClient()
+
       // 1. Vue récapitulative du stock
-      const { data: stockData, error: stockErr } = await supabase
+      const { data: stockData, error: stockErr } = await sb
         .from('revente_stock_summary')
         .select('*')
         .order('produit')
@@ -49,7 +51,7 @@ export default function StockPage() {
       setStockItems(stockData ?? [])
 
       // 2. Ventes → métriques
-      const { data: ventesData, error: ventesErr } = await supabase
+      const { data: ventesData, error: ventesErr } = await sb
         .from('revente_ventes')
         .select('prix_achat_unitaire, prix_revente_unitaire, qte_vendue, plateforme')
 
@@ -93,13 +95,13 @@ export default function StockPage() {
 
   /* ──── CRUD ──── */
   const handleAdd = async (formData) => {
-    const { error } = await supabase.from('revente_stock').insert([formData])
+    const { error } = await getSupabaseClient().from('revente_stock').insert([formData])
     if (error) throw error
     await fetchData()
   }
 
   const handleEdit = async (formData) => {
-    const { error } = await supabase
+    const { error } = await getSupabaseClient()
       .from('revente_stock')
       .update(formData)
       .eq('id', editItem.id)
@@ -114,7 +116,7 @@ export default function StockPage() {
       )
     )
       return
-    const { error } = await supabase.from('revente_stock').delete().eq('id', id)
+    const { error } = await getSupabaseClient().from('revente_stock').delete().eq('id', id)
     if (error) {
       alert('Erreur lors de la suppression')
       return
