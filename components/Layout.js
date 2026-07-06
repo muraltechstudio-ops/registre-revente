@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/router'
-import { getSupabaseClient } from '../lib/supabaseClient'
+import { supabase } from '../lib/supabaseClient'
 
 const NAV_ITEMS = [
   { href: '/stock', label: 'Stock' },
@@ -13,7 +13,7 @@ export default function Layout({ children }) {
   const [menuOpen, setMenuOpen] = useState(false)
 
   const handleLogout = async () => {
-    await getSupabaseClient().auth.signOut()
+    await supabase.auth.signOut()
     router.replace('/login')
   }
 

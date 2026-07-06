@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
-import { getSupabaseClient } from '../lib/supabaseClient'
+import { supabase } from '../lib/supabaseClient'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -11,7 +11,7 @@ export default function LoginPage() {
   const [initialCheck, setInitialCheck] = useState(true)
 
   useEffect(() => {
-    getSupabaseClient().auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
         router.replace('/stock')
       } else {
@@ -25,7 +25,7 @@ export default function LoginPage() {
     setLoading(true)
     setError('')
 
-    const { error: authError } = await getSupabaseClient().auth.signInWithPassword({
+    const { error: authError } = await supabase.auth.signInWithPassword({
       email,
       password,
     })

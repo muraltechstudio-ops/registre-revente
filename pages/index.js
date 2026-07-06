@@ -1,12 +1,12 @@
 import { useEffect } from 'react'
 import { useRouter } from 'next/router'
-import { getSupabaseClient } from '../lib/supabaseClient'
+import { supabase } from '../lib/supabaseClient'
 
 export default function Home() {
   const router = useRouter()
 
   useEffect(() => {
-    getSupabaseClient().auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
       router.replace(session ? '/stock' : '/login')
     })
   }, [router])
