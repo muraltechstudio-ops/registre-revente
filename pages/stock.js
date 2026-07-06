@@ -1,9 +1,26 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useRouter } from 'next/router'
 import { supabase } from '../lib/supabaseClient'
 import AuthGuard from '../components/AuthGuard'
 import Layout from '../components/Layout'
 import StockModal from '../components/StockModal'
+import toast from 'react-hot-toast'
+import {
+  Package,
+  Plus,
+  Search,
+  ShoppingCart,
+  Pencil,
+  Trash2,
+  Box,
+  TrendingUp,
+  Wallet,
+  CalendarCheck,
+  X,
+  AlertTriangle,
+} from 'lucide-react'
 
+/* ──── Constantes ──── */
 const ALL_CATEGORIES = [
   'Informatique',
   'Mode',
@@ -15,50 +32,62 @@ const ALL_CATEGORIES = [
   'Autre',
 ]
 
-const FILTER_CATEGORIES = ['Toutes', ...ALL_CATEGORIES]
-
 const formatCurrency = (value) =>
   new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(value)
 
+const STOCK_LOW_THRESHOLD = 3
+
+/* ──── Squelette ──── */
+function Skeleton({ className }) {
+  return <div className={`animate-pulse bg-ink/10 rounded ${className}`} />
+}
+
+/* ──── Page ──── */
 export default function StockPage() {
+  const router = useRouter()
   const [stockItems, setStockItems] = useState([])
   const [loading, setLoading] = useState(true)
-  const [categoryFilter, setCategoryFilter] = useState('Toutes')
+  const [search, setSearch] = useState('')
+  const [activeCategory, setActiveCategory] = useState(null) // null = Toutes
   const [modalOpen, setModalOpen] = useState(false)
   const [editItem, setEditItem] = useState(null)
+  const [deleteTarget, setDeleteTarget] = useState(null)
 
   // Métriques
   const [metrics, setMetrics] = useState({
     totalStockValue: 0,
     totalBenefit: 0,
     totalSales: 0,
-    byPlatform: {},
+    monthSales: 0,
   })
 
-  /* ──── Centralisée : recharge tout ──── */
+  /* ──── Chargement ──── */
   const fetchData = useCallback(async () => {
     setLoading(true)
     try {
       const sb = supabase
 
-      // 1. Vue récapitulative du stock
-      const { data: stockData, error: stockErr } = await sb
-        .from('revente_stock_summary')
-        .select('*')
-        .order('produit')
+      // Stock summary + photos
+      const [summaryRes, photosRes, ventesRes] = await Promise.all([
+        sb.from('revente_stock_summary').select('*').order('produit'),
+        sb.from('revente_stock').select('id, photo_url'),
+        sb.from('revente_ventes').select('prix_achat_unitaire, prix_revente_unitaire, qte_vendue, date_vente'),
+      ])
 
-      if (stockErr) throw stockErr
-      setStockItems(stockData ?? [])
+      if (summaryRes.error) throw summaryRes.error
+      if (photosRes.error) throw photosRes.error
+      if (ventesRes.error) throw ventesRes.error
 
-      // 2. Ventes → métriques
-      const { data: ventesData, error: ventesErr } = await sb
-        .from('revente_ventes')
-        .select('prix_achat_unitaire, prix_revente_unitaire, qte_vendue, plateforme')
+      // Fusionner photo_url dans les items du summary
+      const photos = photosRes.data ?? []
+      const items = (summaryRes.data ?? []).map((item) => ({
+        ...item,
+        photo_url: photos.find((p) => p.id === item.id)?.photo_url ?? null,
+      }))
+      setStockItems(items)
 
-      if (ventesErr) throw ventesErr
-
-      const ventes = ventesData ?? []
-
+      // Métriques
+      const ventes = ventesRes.data ?? []
       const totalBenefit = ventes.reduce(
         (sum, v) =>
           sum +
@@ -67,23 +96,19 @@ export default function StockPage() {
         0,
       )
 
-      const byPlatform = ventes.reduce((acc, v) => {
-        const ben =
-          (Number.parseFloat(v.prix_revente_unitaire) - Number.parseFloat(v.prix_achat_unitaire)) *
-          v.qte_vendue
-        acc[v.plateforme] = (acc[v.plateforme] ?? 0) + ben
-        return acc
-      }, {})
+      const now = new Date()
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]
+      const monthSales = ventes.filter((v) => v.date_vente >= monthStart).length
 
-      const totalStockValue = (stockData ?? []).reduce(
+      const totalStockValue = items.reduce(
         (sum, item) => sum + Number.parseFloat(item.valeur_stock_restant ?? 0),
         0,
       )
 
-      setMetrics({ totalStockValue, totalBenefit, totalSales: ventes.length, byPlatform })
+      setMetrics({ totalStockValue, totalBenefit, totalSales: ventes.length, monthSales })
     } catch (err) {
       console.error(err)
-      alert('Erreur lors du chargement des données')
+      toast.error('Erreur lors du chargement du stock')
     } finally {
       setLoading(false)
     }
@@ -93,10 +118,27 @@ export default function StockPage() {
     fetchData()
   }, [fetchData])
 
+  /* ──── Filtres ──── */
+  const filteredItems = useMemo(() => {
+    let items = stockItems
+
+    if (activeCategory) {
+      items = items.filter((item) => item.categorie === activeCategory)
+    }
+
+    if (search.trim()) {
+      const q = search.toLowerCase()
+      items = items.filter((item) => item.produit.toLowerCase().includes(q))
+    }
+
+    return items
+  }, [stockItems, activeCategory, search])
+
   /* ──── CRUD ──── */
   const handleAdd = async (formData) => {
     const { error } = await supabase.from('revente_stock').insert([formData])
     if (error) throw error
+    toast.success('Article ajouté')
     await fetchData()
   }
 
@@ -106,29 +148,20 @@ export default function StockPage() {
       .update(formData)
       .eq('id', editItem.id)
     if (error) throw error
+    toast.success('Article modifié')
     await fetchData()
   }
 
-  const handleDelete = async (id, produit) => {
-    if (
-      !window.confirm(
-        `Supprimer "${produit}" ? Les ventes liées conserveront l'historique (le produit deviendra "Non spécifié").`,
-      )
-    )
-      return
+  const confirmDelete = async (id) => {
     const { error } = await supabase.from('revente_stock').delete().eq('id', id)
     if (error) {
-      alert('Erreur lors de la suppression')
+      toast.error("Erreur lors de la suppression")
       return
     }
+    toast.success('Article supprimé')
+    setDeleteTarget(null)
     await fetchData()
   }
-
-  /* ──── Filtrage catégorie ──── */
-  const filteredItems =
-    categoryFilter === 'Toutes'
-      ? stockItems
-      : stockItems.filter((item) => item.categorie === categoryFilter)
 
   /* ──── Modal helpers ──── */
   const openAddModal = () => {
@@ -146,203 +179,415 @@ export default function StockPage() {
     setEditItem(null)
   }
 
-  /* ──── Plateformes du bandeau (top 4) ──── */
-  const platformEntries = Object.entries(metrics.byPlatform)
-    .sort(([, a], [, b]) => b - a)
-    .slice(0, 4)
-
-  /* ──── Rendu ──── */
-  if (loading) {
-    return (
-      <AuthGuard>
-        <Layout>
-          <div className="flex items-center justify-center py-20">
-            <div className="animate-spin h-8 w-8 border-4 border-gray-300 border-t-gray-800 rounded-full" />
-          </div>
-        </Layout>
-      </AuthGuard>
-    )
+  /* ──── Acheminer vers la vente ──── */
+  const goToSell = (id) => {
+    router.push(`/ventes?produit=${id}`)
   }
 
+  /* ──── Rendu ──── */
   return (
     <AuthGuard>
       <Layout>
-        {/* ── Bandeau de métriques ── */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          {/* Valeur stock */}
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Valeur du stock
-            </p>
-            <p className="text-2xl font-bold text-gray-800 mt-1">
-              {formatCurrency(metrics.totalStockValue)}
-            </p>
-          </div>
-
-          {/* Bénéfice cumulé */}
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Bénéfice cumulé
-            </p>
-            <p className="text-2xl font-bold text-profit mt-1">
-              {formatCurrency(metrics.totalBenefit)}
-            </p>
-          </div>
-
-          {/* Nombre de ventes */}
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Ventes</p>
-            <p className="text-2xl font-bold text-gray-800 mt-1">{metrics.totalSales}</p>
-          </div>
-
-          {/* Par plateforme */}
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Par plateforme
-            </p>
-            <div className="mt-1 text-sm text-gray-700 leading-relaxed">
-              {platformEntries.length > 0 ? (
-                platformEntries.map(([pfx, ben], i) => (
-                  <span key={pfx}>
-                    {i > 0 && <span className="text-gray-300 mx-1">·</span>}
-                    <span>
-                      {pfx}: {formatCurrency(ben)}
-                    </span>
-                  </span>
-                ))
-              ) : (
-                <span className="text-gray-400">Aucune vente</span>
-              )}
-            </div>
-          </div>
+        {/* Titre */}
+        <div className="mb-6">
+          <h1 className="font-serif text-2xl font-bold text-ink">Stock</h1>
+          <hr className="double-rule mt-2" />
         </div>
 
-        {/* ── Barre d'actions ── */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
-          <button
-            onClick={openAddModal}
-            className="inline-flex items-center gap-1.5 bg-gray-800 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-700 transition-colors"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-            </svg>
-            Ajouter un article
-          </button>
-
-          <select
-            value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
-            className="border border-gray-300 bg-white rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-gray-400 outline-none"
-          >
-            {FILTER_CATEGORIES.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* ── Tableau ── */}
-        {filteredItems.length === 0 ? (
-          <div className="text-center py-16 bg-white rounded-lg border border-gray-200">
-            <svg
-              className="mx-auto h-12 w-12 text-gray-300"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={1}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
-              />
-            </svg>
-            <p className="mt-4 text-lg font-medium text-gray-500">Aucun article</p>
-            <p className="text-sm text-gray-400 mt-1">
-              Ajoute ton premier lot en cliquant sur &quot;Ajouter un article&quot;
-            </p>
-          </div>
+        {loading ? (
+          <StockSkeleton />
         ) : (
-          <div className="overflow-x-auto bg-white rounded-lg border border-gray-200">
-            <table className="min-w-full divide-y divide-gray-200 text-sm">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-4 py-3 text-left font-medium text-gray-500">Produit</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-500">Catégorie</th>
-                  <th className="px-4 py-3 text-right font-medium text-gray-500">Prix achat</th>
-                  <th className="px-4 py-3 text-right font-medium text-gray-500">En stock</th>
-                  <th className="px-4 py-3 text-right font-medium text-gray-500">Vendue(s)</th>
-                  <th className="px-4 py-3 text-right font-medium text-gray-500">Restante(s)</th>
-                  <th className="px-4 py-3 text-right font-medium text-gray-500">Prix vente</th>
-                  <th className="px-4 py-3 text-right font-medium text-gray-500">Valeur stock</th>
-                  <th className="px-4 py-3 text-center font-medium text-gray-500">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {filteredItems.map((item) => (
-                  <tr key={item.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">
-                      {item.produit}
-                    </td>
-                    <td className="px-4 py-3 text-gray-600">{item.categorie}</td>
-                    <td className="px-4 py-3 text-right text-gray-700">
-                      {formatCurrency(item.prix_achat_unitaire)}
-                    </td>
-                    <td className="px-4 py-3 text-right text-gray-700">{item.qte_stock}</td>
-                    <td className="px-4 py-3 text-right text-gray-600">{item.qte_vendue}</td>
-                    <td className="px-4 py-3 text-right font-semibold text-gray-900">
-                      {item.qte_restante}
-                    </td>
-                    <td className="px-4 py-3 text-right text-gray-700">
-                      {formatCurrency(item.prix_revente_unitaire)}
-                    </td>
-                    <td className="px-4 py-3 text-right font-semibold text-gray-900">
-                      {formatCurrency(item.valeur_stock_restant)}
-                    </td>
-                    <td className="px-4 py-3 text-center whitespace-nowrap">
-                      <button
-                        onClick={() => openEditModal(item)}
-                        className="text-blue-600 hover:text-blue-800 mr-2 p-1 rounded hover:bg-blue-50 transition-colors"
-                        title="Modifier"
-                      >
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                          />
-                        </svg>
-                      </button>
-                      <button
-                        onClick={() => handleDelete(item.id, item.produit)}
-                        className="text-red-500 hover:text-red-700 p-1 rounded hover:bg-red-50 transition-colors"
-                        title="Supprimer"
-                      >
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                          />
-                        </svg>
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <>
+            {/* ══════ BANDEAU KPI ══════ */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+              <div className="bg-white rounded-lg border border-border p-4 flex items-start gap-3">
+                <Wallet className="w-5 h-5 text-sage mt-0.5" />
+                <div>
+                  <p className="text-xs font-medium text-ink/50 uppercase tracking-wider">Valeur du stock</p>
+                  <p className="text-xl font-bold font-mono text-ink mt-0.5">{formatCurrency(metrics.totalStockValue)}</p>
+                </div>
+              </div>
+              <div className="bg-white rounded-lg border border-border p-4 flex items-start gap-3">
+                <TrendingUp className={`w-5 h-5 mt-0.5 ${metrics.totalBenefit >= 0 ? 'text-sage' : 'text-terracotta'}`} />
+                <div>
+                  <p className="text-xs font-medium text-ink/50 uppercase tracking-wider">Bénéfice cumulé</p>
+                  <p className={`text-xl font-bold font-mono mt-0.5 ${metrics.totalBenefit >= 0 ? 'text-sage' : 'text-terracotta'}`}>
+                    {formatCurrency(metrics.totalBenefit)}
+                  </p>
+                </div>
+              </div>
+              <div className="bg-white rounded-lg border border-border p-4 flex items-start gap-3">
+                <CalendarCheck className="w-5 h-5 text-amber mt-0.5" />
+                <div>
+                  <p className="text-xs font-medium text-ink/50 uppercase tracking-wider">Ventes totales</p>
+                  <p className="text-xl font-bold font-mono text-ink mt-0.5">{metrics.totalSales}</p>
+                </div>
+              </div>
+              <div className="bg-white rounded-lg border border-border p-4 flex items-start gap-3">
+                <ShoppingCart className="w-5 h-5 text-ink/50 mt-0.5" />
+                <div>
+                  <p className="text-xs font-medium text-ink/50 uppercase tracking-wider">Ventes ce mois</p>
+                  <p className="text-xl font-bold font-mono text-ink mt-0.5">{metrics.monthSales}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* ══════ BARRE RECHERCHE + BOUTON AJOUTER ══════ */}
+            <div className="flex flex-col sm:flex-row gap-3 mb-4">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink/30" />
+                <input
+                  type="text"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Rechercher un produit…"
+                  className="w-full pl-9 pr-3 py-2 border border-border bg-white rounded-md text-sm focus:ring-2 focus:ring-sage/30 focus:border-sage outline-none transition-colors"
+                />
+              </div>
+              <button
+                onClick={openAddModal}
+                className="inline-flex items-center gap-2 bg-sage text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-sage-light transition-colors shrink-0"
+              >
+                <Plus className="w-4 h-4" />
+                Ajouter un article
+              </button>
+            </div>
+
+            {/* ══════ CHIPS CATÉGORIES ══════ */}
+            <div className="flex flex-wrap gap-2 mb-4">
+              <button
+                onClick={() => setActiveCategory(null)}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors border ${
+                  activeCategory === null
+                    ? 'bg-sage text-white border-sage'
+                    : 'bg-white text-ink/60 border-border hover:border-sage/50 hover:text-sage'
+                }`}
+              >
+                Toutes
+              </button>
+              {ALL_CATEGORIES.map((cat) => (
+                <button
+                  key={cat}
+                  onClick={() => setActiveCategory(activeCategory === cat ? null : cat)}
+                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors border ${
+                    activeCategory === cat
+                      ? 'bg-sage text-white border-sage'
+                      : 'bg-white text-ink/60 border-border hover:border-sage/50 hover:text-sage'
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+
+            {/* ══════ ÉTAT VIDE ══════ */}
+            {filteredItems.length === 0 ? (
+              <EmptyState
+                icon={Box}
+                title={
+                  search || activeCategory
+                    ? 'Aucun article ne correspond'
+                    : 'Aucun article dans le stock'
+                }
+                action={
+                  search || activeCategory
+                    ? null
+                    : { label: 'Ajouter mon premier article', onClick: openAddModal }
+                }
+              />
+            ) : (
+              <>
+                {/* ── Desktop : TABLEAU ── */}
+                <div className="hidden sm:block overflow-x-auto bg-white rounded-lg border border-border">
+                  <table className="min-w-full divide-y divide-border text-sm">
+                    <thead className="bg-ink/[0.02]">
+                      <tr>
+                        <th className="px-4 py-3 text-left font-medium text-ink/50">Produit</th>
+                        <th className="px-4 py-3 text-left font-medium text-ink/50">Catégorie</th>
+                        <th className="px-4 py-3 text-right font-medium text-ink/50">Prix achat</th>
+                        <th className="px-4 py-3 text-right font-medium text-ink/50">Stock</th>
+                        <th className="px-4 py-3 text-right font-medium text-ink/50">Restant</th>
+                        <th className="px-4 py-3 text-right font-medium text-ink/50">Prix vente</th>
+                        <th className="px-4 py-3 text-right font-medium text-ink/50">Valeur</th>
+                        <th className="px-4 py-3 text-center font-medium text-ink/50">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/60">
+                      {filteredItems.map((item, idx) => (
+                        <tr
+                          key={item.id}
+                          className={`transition-colors ${
+                            idx % 2 === 0 ? 'bg-white' : 'bg-ink/[0.02]'
+                          } hover:bg-sage-pale/50`}
+                        >
+                          {/* Produit + photo */}
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-3">
+                              <ProductThumb url={item.photo_url} size={36} />
+                              <span className="font-medium text-ink whitespace-nowrap">
+                                {item.produit}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-ink/60">{item.categorie}</td>
+                          <td className="px-4 py-3 text-right font-mono text-ink/70">
+                            {formatCurrency(item.prix_achat_unitaire)}
+                          </td>
+                          <td className="px-4 py-3 text-right font-mono text-ink">
+                            {item.qte_stock}
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <span className={`font-mono font-semibold ${item.qte_restante <= STOCK_LOW_THRESHOLD ? 'text-terracotta' : 'text-sage'}`}>
+                              {item.qte_restante}
+                            </span>
+                            {item.qte_restante <= STOCK_LOW_THRESHOLD && (
+                              <span className="ml-1.5 inline-flex items-center gap-0.5 text-[10px] font-medium text-terracotta bg-terracotta-pale px-1.5 py-0.5 rounded-sm">
+                                <AlertTriangle className="w-2.5 h-2.5" />
+                                Stock faible
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-right font-mono text-ink/70">
+                            {formatCurrency(item.prix_revente_unitaire)}
+                          </td>
+                          <td className="px-4 py-3 text-right font-mono font-semibold text-ink">
+                            {formatCurrency(item.valeur_stock_restant)}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <div className="flex items-center justify-center gap-1">
+                              <button
+                                onClick={() => goToSell(item.id)}
+                                className="p-1.5 rounded text-sage hover:bg-sage-pale transition-colors"
+                                title="Vendre"
+                              >
+                                <ShoppingCart className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => openEditModal(item)}
+                                className="p-1.5 rounded text-amber hover:bg-amber-pale transition-colors"
+                                title="Modifier"
+                              >
+                                <Pencil className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => setDeleteTarget(item)}
+                                className="p-1.5 rounded text-terracotta hover:bg-terracotta-pale transition-colors"
+                                title="Supprimer"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* ── Mobile : CARTES ── */}
+                <div className="sm:hidden space-y-3">
+                  {filteredItems.map((item) => (
+                    <div key={item.id} className="bg-white rounded-lg border border-border p-4">
+                      <div className="flex items-start gap-3">
+                        <ProductThumb url={item.photo_url} size={48} />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="font-medium text-ink truncate">{item.produit}</p>
+                            {item.qte_restante <= STOCK_LOW_THRESHOLD && (
+                              <span className="shrink-0 inline-flex items-center gap-0.5 text-[10px] font-medium text-terracotta bg-terracotta-pale px-1.5 py-0.5 rounded-sm">
+                                <AlertTriangle className="w-2.5 h-2.5" />
+                                Stock faible
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-ink/50 mt-0.5">{item.categorie}</p>
+                          <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-2 text-xs">
+                            <span className="text-ink/50">Stock : <strong className="font-mono text-ink">{item.qte_stock}</strong></span>
+                            <span className="text-ink/50">Vendue(s) : <strong className="font-mono text-ink">{item.qte_vendue}</strong></span>
+                            <span className="text-ink/50">Restante(s) : <strong className={`font-mono ${item.qte_restante <= STOCK_LOW_THRESHOLD ? 'text-terracotta' : 'text-sage'}`}>{item.qte_restante}</strong></span>
+                            <span className="text-ink/50">Valeur : <strong className="font-mono text-sage">{formatCurrency(item.valeur_stock_restant)}</strong></span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 mt-3">
+                            <div className="text-xs text-ink/50">
+                              Achat <span className="font-mono text-ink/70 block">{formatCurrency(item.prix_achat_unitaire)}</span>
+                            </div>
+                            <div className="text-xs text-ink/50">
+                              Vente <span className="font-mono text-ink/70 block">{formatCurrency(item.prix_revente_unitaire)}</span>
+                            </div>
+                          </div>
+                          <div className="flex gap-2 mt-3 pt-3 border-t border-border/50">
+                            <button
+                              onClick={() => goToSell(item.id)}
+                              className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium text-white bg-sage rounded-md py-1.5 hover:bg-sage-light transition-colors"
+                            >
+                              <ShoppingCart className="w-3.5 h-3.5" />
+                              Vendre
+                            </button>
+                            <button
+                              onClick={() => openEditModal(item)}
+                              className="flex items-center justify-center gap-1.5 text-xs font-medium text-amber bg-amber-pale rounded-md px-3 py-1.5 hover:bg-amber/10 transition-colors"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => setDeleteTarget(item)}
+                              className="flex items-center justify-center gap-1.5 text-xs font-medium text-terracotta bg-terracotta-pale rounded-md px-3 py-1.5 hover:bg-terracotta/10 transition-colors"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </>
         )}
 
-        {/* ── Modal ── */}
+        {/* ── MODAL AJOUT / ÉDITION ── */}
         <StockModal
           isOpen={modalOpen}
           onClose={closeModal}
           onSave={editItem ? handleEdit : handleAdd}
           item={editItem}
         />
+
+        {/* ── MODAL CONFIRMATION SUPPRESSION ── */}
+        <ConfirmDeleteModal
+          isOpen={deleteTarget !== null}
+          item={deleteTarget}
+          onConfirm={confirmDelete}
+          onCancel={() => setDeleteTarget(null)}
+        />
       </Layout>
     </AuthGuard>
+  )
+}
+
+/* ──── Vignette produit ──── */
+function ProductThumb({ url, size }) {
+  if (url) {
+    return (
+      <img
+        src={url}
+        alt=""
+        className="rounded-md object-cover border border-border shrink-0"
+        style={{ width: size, height: size }}
+      />
+    )
+  }
+  return (
+    <div
+      className="rounded-md bg-ink/5 border border-border flex items-center justify-center shrink-0"
+      style={{ width: size, height: size }}
+    >
+      <Package className="w-4 h-4 text-ink/20" />
+    </div>
+  )
+}
+
+/* ──── Modal confirmation suppression ──── */
+function ConfirmDeleteModal({ isOpen, item, onConfirm, onCancel }) {
+  if (!isOpen || !item) return null
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4"
+      onClick={onCancel}
+    >
+      <div
+        className="bg-paper rounded-lg shadow-lg w-full max-w-sm border border-border p-6"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-3 mb-3">
+          <div className="w-8 h-8 rounded-full bg-terracotta-pale flex items-center justify-center">
+            <AlertTriangle className="w-4 h-4 text-terracotta" />
+          </div>
+          <h3 className="font-serif font-bold text-ink">Supprimer l&apos;article</h3>
+        </div>
+        <p className="text-sm text-ink/70">
+          Es-tu sûr de vouloir supprimer{' '}
+          <strong className="text-ink">{item.produit}</strong> ?
+          Les ventes liées conserveront l&apos;historique.
+        </p>
+        <div className="flex justify-end gap-3 mt-6">
+          <button
+            onClick={onCancel}
+            className="px-4 py-2 text-sm font-medium text-ink/50 hover:text-ink transition-colors"
+          >
+            Annuler
+          </button>
+          <button
+            onClick={() => onConfirm(item.id)}
+            className="px-5 py-2 text-sm font-medium text-white bg-terracotta rounded-md hover:bg-terracotta-light transition-colors"
+          >
+            Supprimer
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ──── État vide ──── */
+function EmptyState({ icon: Icon, title, action }) {
+  return (
+    <div className="text-center py-16 bg-white rounded-lg border border-border">
+      <Icon className="mx-auto w-12 h-12 text-ink/15" />
+      <p className="mt-4 text-base font-medium text-ink/50">{title}</p>
+      {action && (
+        <button
+          onClick={action.onClick}
+          className="mt-4 inline-flex items-center gap-2 bg-sage text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-sage-light transition-colors"
+        >
+          <Plus className="w-4 h-4" />
+          {action.label}
+        </button>
+      )}
+    </div>
+  )
+}
+
+/* ──── Squelettes chargement ──── */
+function StockSkeleton() {
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="bg-white rounded-lg border border-border p-4 flex items-start gap-3">
+            <Skeleton className="w-5 h-5 rounded" />
+            <div className="flex-1">
+              <Skeleton className="h-3 w-24 mb-2" />
+              <Skeleton className="h-6 w-28" />
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="flex gap-2">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <Skeleton key={i} className="h-8 w-20 rounded-md" />
+        ))}
+      </div>
+      <div className="bg-white rounded-lg border border-border overflow-hidden">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div
+            key={i}
+            className={`flex items-center gap-4 px-4 py-3 ${i > 0 ? 'border-t border-border/60' : ''}`}
+          >
+            <Skeleton className="w-9 h-9 rounded-md shrink-0" />
+            <Skeleton className="h-4 flex-1" />
+            <Skeleton className="h-4 w-16" />
+            <Skeleton className="h-4 w-12" />
+            <Skeleton className="h-4 w-12" />
+            <Skeleton className="h-4 w-16" />
+            <Skeleton className="h-4 w-16" />
+            <Skeleton className="h-4 w-20" />
+            <Skeleton className="h-8 w-24" />
+          </div>
+        ))}
+      </div>
+    </div>
   )
 }

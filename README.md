@@ -62,14 +62,49 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=ta-cle-anon
 > Ce script est **idempotent** : tu peux l'exécuter plusieurs fois sans
 > risque d'erreur (merci les `create table if not exists` / `drop policy if exists`).
 
-### 4. Créer un utilisateur
+### 4. Migration photo
+
+Optionnel — si tu veux pouvoir ajouter des photos aux articles :
+
+1. Exécute `supabase/migration_photo.sql` dans le SQL Editor Supabase.
+2. Crée un bucket de stockage public :
+
+   - Va dans **Storage → Nouveau bucket**
+   - Nom : `produits-photos`
+   - Public : ✅ **Oui**
+   - RLS : applique ces policies dans **Storage → Policies** :
+
+   ```sql
+   -- Permettre l'upload à tout utilisateur authentifié
+   create policy "Upload produits-photos"
+   on storage.objects for insert
+   with check (
+     bucket_id = 'produits-photos'
+     and auth.role() = 'authenticated'
+   );
+
+   -- Permettre la lecture publique
+   create policy "Read produits-photos"
+   on storage.objects for select
+   using (bucket_id = 'produits-photos');
+   ```
+
+   Ou utilise le bouton **Create policy** → **For full custom** → colle ces deux policies.
+
+### 5. Créer un utilisateur
 
 Toujours dans le dashboard Supabase :
 1. Va dans **Authentication → Users**.
 2. Clique sur **Add User** et crée un compte email/mot de passe.
-3. Retourne à l'app et connecte-toi avec ces identifiants.
+3. Confirme son email en exécutant dans le SQL Editor :
 
-### 5. Lancer le serveur de développement
+   ```sql
+   UPDATE auth.users SET email_confirmed_at = now() WHERE email = 'ton-email';
+   ```
+
+4. Retourne à l'app et connecte-toi avec ces identifiants.
+
+### 6. Lancer le serveur de développement
 
 ```bash
 npm run dev
@@ -108,22 +143,33 @@ vercel --prod
 Seuls les utilisateurs créés manuellement dans Supabase Auth peuvent se
 connecter. Il n'y a pas d'inscription publique.
 
-### Page Stock
+### Tableau de bord
 
-- Vue d'ensemble du stock avec 4 indicateurs clés
-- Filtrage par catégorie
-- Ajout, modification et suppression d'articles
-- Calcul automatique des quantités restantes et de la valeur du stock
+Page d'accueil après connexion. Affiche :
 
-### Page Ventes
+- **4 cartes KPI** : valeur du stock, bénéfice cumulé, bénéfice et ventes du mois
+- **Graphique en barres** : bénéfice net par mois (12 mois glissants)
+- **Graphique en anneau** : répartition du bénéfice par plateforme
+- **Top 5 articles** les plus rentables avec barre de progression visuelle
 
-- Formulaire d'ajout avec sélection du produit (prix d'achat et suggestion
-  de prix de revente pré-remplis)
+### Stock
+
+- Barre de recherche texte en temps réel et filtres par catégorie (chips cliquables)
+- Tableau desktop / cartes mobile
+- Badge "Stock faible" quand il reste ≤ 3 unités
+- Bouton "Vendre" sur chaque ligne pour créer une vente rapidement
+- Modal d'ajout/édition avec upload de photo optionnel
+- Modal de confirmation pour la suppression
+
+### Ventes
+
+- Formulaire réorganisé en 2 colonnes (infos produit/vente, infos client optionnelles)
+- Sélection produit avec pré-remplissage automatique des prix
 - Avertissement si la quantité vendue dépasse le stock disponible
-- Historique complet avec bénéfices unitaire et total par ligne
-- Filtres par plateforme et par période
-- Ligne de total général sur les lignes filtrées
-- Export CSV (UTF-8 BOM, compatible Excel français — accents et € OK)
+- Recherche + filtres par plateforme et période
+- Historique complet avec bénéfices en monospace vert/rouge
+- Ligne de total général sur les lignes filtrées (desktop et mobile)
+- Export CSV (UTF-8 BOM, compatible Excel français)
 
 ---
 

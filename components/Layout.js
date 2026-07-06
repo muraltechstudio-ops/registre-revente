@@ -1,16 +1,42 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/router'
 import { supabase } from '../lib/supabaseClient'
+import {
+  LayoutDashboard,
+  Package,
+  Receipt,
+  LogOut,
+  Menu,
+  X,
+} from 'lucide-react'
 
 const NAV_ITEMS = [
-  { href: '/stock', label: 'Stock' },
-  { href: '/ventes', label: 'Ventes' },
+  { href: '/dashboard', label: 'Tableau de bord', icon: LayoutDashboard },
+  { href: '/stock', label: 'Stock', icon: Package },
+  { href: '/ventes', label: 'Ventes', icon: Receipt },
 ]
+
+const MONTHS = [
+  'janvier', 'février', 'mars', 'avril', 'mai', 'juin',
+  'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre',
+]
+
+function formatDate(date) {
+  const d = new Date(date)
+  return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`
+}
 
 export default function Layout({ children }) {
   const router = useRouter()
   const [menuOpen, setMenuOpen] = useState(false)
+  const [user, setUser] = useState(null)
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      setUser(data?.user ?? null)
+    })
+  }, [])
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
@@ -18,95 +44,100 @@ export default function Layout({ children }) {
   }
 
   const isActive = (href) => router.pathname === href
+  const today = new Date()
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      {/* Navigation */}
-      <nav className="bg-white border-b border-gray-200 sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6">
-          <div className="flex justify-between h-14 items-center">
-            {/* Logo / titre */}
-            <Link
-              href="/stock"
-              className="font-bold text-base sm:text-lg text-gray-800 hover:text-gray-600 transition-colors"
-            >
-              Registre de Revente
-            </Link>
+    <div className="min-h-screen flex flex-col md:flex-row bg-paper">
+      {/* Mobile header bar */}
+      <div className="md:hidden flex items-center justify-between bg-white border-b border-ink/10 px-4 py-3 sticky top-0 z-50">
+        <button
+          onClick={() => setMenuOpen(true)}
+          className="p-2 -ml-2 rounded-md text-ink hover:bg-sage/5 transition-colors"
+          aria-label="Menu"
+        >
+          <Menu className="w-5 h-5" />
+        </button>
+        <span className="font-serif text-lg font-bold text-ink">
+          Registre de Revente
+        </span>
+        <div className="w-9" />
+      </div>
 
-            {/* Desktop links */}
-            <div className="hidden md:flex items-center gap-1">
-              {NAV_ITEMS.map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                    isActive(item.href)
-                      ? 'bg-gray-100 text-gray-900'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                  }`}
-                >
-                  {item.label}
-                </Link>
-              ))}
-              <button
-                onClick={handleLogout}
-                className="ml-2 px-3 py-2 text-sm font-medium text-red-600 hover:text-red-800 hover:bg-red-50 rounded-md transition-colors"
-              >
-                Déconnexion
-              </button>
-            </div>
+      {/* Mobile overlay */}
+      {menuOpen && (
+        <div
+          className="fixed inset-0 bg-black/30 z-40 md:hidden"
+          onClick={() => setMenuOpen(false)}
+        />
+      )}
 
-            {/* Mobile hamburger */}
-            <button
-              type="button"
-              className="md:hidden p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-colors"
-              onClick={() => setMenuOpen((o) => !o)}
-              aria-label="Menu"
-            >
-              {menuOpen ? (
-                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              ) : (
-                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
-              )}
-            </button>
-          </div>
+      {/* Sidebar */}
+      <aside
+        className={`fixed md:sticky top-0 left-0 z-50 h-dvh w-64 bg-white border-r border-ink/10 flex flex-col transition-transform duration-200 ease-in-out ${
+          menuOpen ? 'translate-x-0' : '-translate-x-full'
+        } md:translate-x-0`}
+      >
+        {/* Close button mobile */}
+        <button
+          onClick={() => setMenuOpen(false)}
+          className="md:hidden absolute top-3 right-3 p-1 rounded text-ink/40 hover:text-ink transition-colors"
+          aria-label="Fermer"
+        >
+          <X className="w-5 h-5" />
+        </button>
+
+        {/* Logo + date */}
+        <div className="px-5 pt-6 pb-4 border-b border-ink/10">
+          <Link
+            href="/dashboard"
+            className="font-serif text-xl font-bold text-ink tracking-tight"
+          >
+            Registre de Revente
+          </Link>
+          <p className="font-serif text-sm text-ink/50 mt-1">{formatDate(today)}</p>
         </div>
 
-        {/* Mobile menu */}
-        {menuOpen && (
-          <div className="md:hidden border-t border-gray-200 bg-white">
-            <div className="px-4 pt-2 pb-4 space-y-1">
-              {NAV_ITEMS.map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={() => setMenuOpen(false)}
-                  className={`block px-3 py-2 rounded-md text-base font-medium transition-colors ${
-                    isActive(item.href)
-                      ? 'bg-gray-100 text-gray-900'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                  }`}
-                >
-                  {item.label}
-                </Link>
-              ))}
-              <button
-                onClick={handleLogout}
-                className="block w-full text-left px-3 py-2 rounded-md text-base font-medium text-red-600 hover:text-red-800 hover:bg-red-50 transition-colors"
+        {/* Navigation */}
+        <nav className="flex-1 px-3 pt-4 space-y-1">
+          {NAV_ITEMS.map((item) => {
+            const Icon = item.icon
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={() => setMenuOpen(false)}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-colors ${
+                  isActive(item.href)
+                    ? 'bg-sage text-white'
+                    : 'text-ink/60 hover:bg-ink/5 hover:text-ink'
+                }`}
               >
-                Déconnexion
-              </button>
-            </div>
-          </div>
-        )}
-      </nav>
+                <Icon className="w-4 h-4 shrink-0" />
+                {item.label}
+              </Link>
+            )
+          })}
+        </nav>
+
+        {/* User info + logout */}
+        <div className="px-3 pb-4 pt-4 border-t border-ink/10">
+          {user && (
+            <p className="text-xs text-ink/40 truncate mb-2 px-3 font-mono">{user.email}</p>
+          )}
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-3 w-full px-3 py-2.5 rounded-md text-sm font-medium text-terracotta hover:bg-terracotta/5 transition-colors"
+          >
+            <LogOut className="w-4 h-4 shrink-0" />
+            Déconnexion
+          </button>
+        </div>
+      </aside>
 
       {/* Main content */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6">{children}</main>
+      <main className="flex-1 min-h-screen">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 sm:py-6">{children}</div>
+      </main>
     </div>
   )
 }

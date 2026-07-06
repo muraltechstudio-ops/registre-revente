@@ -6,15 +6,35 @@ module.exports = {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        serif: ['var(--font-serif)', 'Georgia', 'serif'],
+        mono: ['var(--font-mono)', 'ui-monospace', 'SFMono-Regular', 'monospace'],
+      },
       colors: {
-        profit: {
-          DEFAULT: '#166534',
-          light: '#dcfce7',
+        paper: '#F7F5EF',
+        ink: '#1C2B24',
+        sage: {
+          DEFAULT: '#274734',
+          light: '#3F6B4F',
+          lighter: '#5B8C6A',
+          pale: '#E8F0E6',
         },
-        loss: {
-          DEFAULT: '#dc2626',
-          light: '#fee2e2',
+        terracotta: {
+          DEFAULT: '#A8432F',
+          light: '#C0604A',
+          pale: '#F5E6E2',
         },
+        amber: {
+          DEFAULT: '#C17A2E',
+          light: '#D4954A',
+          pale: '#F8F0E0',
+        },
+        border: '#D8D3C4',
+      },
+      borderRadius: {
+        sm: '0.25rem',
+        DEFAULT: '0.375rem',
+        md: '0.5rem',
       },
     },
   },
