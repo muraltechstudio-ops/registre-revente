@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { getSupabaseClient } from '../lib/supabaseClient'
+import { supabase } from '../lib/supabaseClient'
 import AuthGuard from '../components/AuthGuard'
 import Layout from '../components/Layout'
 import StockModal from '../components/StockModal'
@@ -39,7 +39,7 @@ export default function StockPage() {
   const fetchData = useCallback(async () => {
     setLoading(true)
     try {
-      const sb = getSupabaseClient()
+      const sb = supabase
 
       // 1. Vue récapitulative du stock
       const { data: stockData, error: stockErr } = await sb
@@ -95,13 +95,13 @@ export default function StockPage() {
 
   /* ──── CRUD ──── */
   const handleAdd = async (formData) => {
-    const { error } = await getSupabaseClient().from('revente_stock').insert([formData])
+    const { error } = await supabase.from('revente_stock').insert([formData])
     if (error) throw error
     await fetchData()
   }
 
   const handleEdit = async (formData) => {
-    const { error } = await getSupabaseClient()
+    const { error } = await supabase
       .from('revente_stock')
       .update(formData)
       .eq('id', editItem.id)
@@ -116,7 +116,7 @@ export default function StockPage() {
       )
     )
       return
-    const { error } = await getSupabaseClient().from('revente_stock').delete().eq('id', id)
+    const { error } = await supabase.from('revente_stock').delete().eq('id', id)
     if (error) {
       alert('Erreur lors de la suppression')
       return
