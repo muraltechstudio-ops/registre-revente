@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { supabase } from '../lib/supabaseClient'
+import { getSupabaseClient } from '../lib/supabaseClient'
 import { exportToCSV } from '../lib/csvExport'
 import AuthGuard from '../components/AuthGuard'
 import Layout from '../components/Layout'
@@ -50,12 +50,14 @@ export default function VentesPage() {
   const [dateFin, setDateFin] = useState('')
 
   /* ──── Chargement ──── */
+  const supabase = getSupabaseClient
+
   const fetchData = useCallback(async () => {
     setLoading(true)
     try {
       const [stockRes, ventesRes] = await Promise.all([
-        supabase.from('revente_stock').select('*').order('produit'),
-        supabase
+        supabase().from('revente_stock').select('*').order('produit'),
+        supabase()
           .from('revente_ventes')
           .select('*')
           .order('date_vente', { ascending: false })
@@ -122,7 +124,7 @@ export default function VentesPage() {
   const handleSubmit = async (e) => {
     e.preventDefault()
     try {
-      const { error } = await supabase.from('revente_ventes').insert([
+      const { error } = await supabase().from('revente_ventes').insert([
         {
           stock_id: form.stock_id || null,
           date_vente: form.date_vente,
@@ -149,7 +151,7 @@ export default function VentesPage() {
   /* ──── Supprimer une vente ──── */
   const handleDelete = async (id) => {
     if (!window.confirm('Supprimer cette vente définitivement ?')) return
-    const { error } = await supabase.from('revente_ventes').delete().eq('id', id)
+    const { error } = await supabase().from('revente_ventes').delete().eq('id', id)
     if (error) {
       alert("Erreur lors de la suppression")
       return
