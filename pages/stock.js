@@ -302,89 +302,93 @@ export default function StockPage() {
               />
             ) : (
               <>
-                {/* ── Desktop : TABLEAU ── */}
-                <div className="hidden sm:block overflow-x-auto bg-white rounded-lg border border-border">
-                  <table className="min-w-full divide-y divide-border text-sm">
+                {/* ── Desktop : TABLEAU compact ── */}
+                <div className="hidden sm:block bg-white rounded-lg border border-border">
+                  <table className="w-full table-fixed text-xs">
                     <thead className="bg-ink/[0.02]">
                       <tr>
-                        <th className="px-4 py-3 text-left font-medium text-ink/50">Produit</th>
-                        <th className="px-4 py-3 text-left font-medium text-ink/50">Catégorie</th>
-                        <th className="px-4 py-3 text-right font-medium text-ink/50">Prix achat</th>
-                        <th className="px-4 py-3 text-right font-medium text-ink/50">Stock</th>
-                        <th className="px-4 py-3 text-right font-medium text-ink/50">Restant</th>
-                        <th className="px-4 py-3 text-right font-medium text-ink/50">Prix vente</th>
-                        <th className="px-4 py-3 text-right font-medium text-ink/50">Valeur</th>
-                        <th className="px-4 py-3 text-center font-medium text-ink/50">Actions</th>
+                        <th className="w-auto px-3 py-2.5 text-left font-medium text-ink/50 uppercase tracking-wider">Produit</th>
+                        <th className="w-28 px-3 py-2.5 text-right font-medium text-ink/50 uppercase tracking-wider">Achat</th>
+                        <th className="w-24 px-3 py-2.5 text-center font-medium text-ink/50 uppercase tracking-wider">Stock</th>
+                        <th className="w-28 px-3 py-2.5 text-right font-medium text-ink/50 uppercase tracking-wider">Vente</th>
+                        <th className="w-28 px-3 py-2.5 text-right font-medium text-ink/50 uppercase tracking-wider">Valeur</th>
+                        <th className="w-28 px-3 py-2.5 text-center font-medium text-ink/50 uppercase tracking-wider">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border/60">
-                      {filteredItems.map((item, idx) => (
-                        <tr
-                          key={item.id}
-                          className={`transition-colors ${
-                            idx % 2 === 0 ? 'bg-white' : 'bg-ink/[0.02]'
-                          } hover:bg-sage-pale/50`}
-                        >
-                          {/* Produit + photo */}
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-3">
-                              <ProductThumb url={item.photo_url} size={36} />
-                              <span className="font-medium text-ink whitespace-nowrap">
-                                {item.produit}
+                      {filteredItems.map((item, idx) => {
+                        const isLow = item.qte_restante <= STOCK_LOW_THRESHOLD
+                        return (
+                          <tr
+                            key={item.id}
+                            className={`transition-colors ${
+                              idx % 2 === 0 ? 'bg-white' : 'bg-ink/[0.02]'
+                            } hover:bg-sage-pale/50`}
+                          >
+                            {/* Produit */}
+                            <td className="px-3 py-2.5">
+                              <div className="flex items-center gap-2.5">
+                                <span className="font-medium text-ink truncate">{item.produit}</span>
+                                {item.categorie && (
+                                  <span className="shrink-0 text-[10px] text-ink/40 bg-ink/5 px-1.5 py-0.5 rounded-sm">{item.categorie}</span>
+                                )}
+                                {isLow && (
+                                  <span className="shrink-0 inline-flex items-center gap-0.5 text-[10px] font-medium text-terracotta bg-terracotta-pale px-1.5 py-0.5 rounded-sm">
+                                    <AlertTriangle className="w-2.5 h-2.5" />
+                                    Faible
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            {/* Prix achat */}
+                            <td className="px-3 py-2.5 text-right font-mono text-ink/70">
+                              {formatCurrency(item.prix_achat_unitaire)}
+                            </td>
+                            {/* Stock : total / restant */}
+                            <td className="px-3 py-2.5 text-center">
+                              <span className="font-mono font-semibold" style={{ color: isLow ? '#A8432F' : '#274734' }}>
+                                {item.qte_restante}
                               </span>
-                            </div>
-                          </td>
-                          <td className="px-4 py-3 text-ink/60">{item.categorie}</td>
-                          <td className="px-4 py-3 text-right font-mono text-ink/70">
-                            {formatCurrency(item.prix_achat_unitaire)}
-                          </td>
-                          <td className="px-4 py-3 text-right font-mono text-ink">
-                            {item.qte_stock}
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                            <span className={`font-mono font-semibold ${item.qte_restante <= STOCK_LOW_THRESHOLD ? 'text-terracotta' : 'text-sage'}`}>
-                              {item.qte_restante}
-                            </span>
-                            {item.qte_restante <= STOCK_LOW_THRESHOLD && (
-                              <span className="ml-1.5 inline-flex items-center gap-0.5 text-[10px] font-medium text-terracotta bg-terracotta-pale px-1.5 py-0.5 rounded-sm">
-                                <AlertTriangle className="w-2.5 h-2.5" />
-                                Stock faible
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3 text-right font-mono text-ink/70">
-                            {formatCurrency(item.prix_revente_unitaire)}
-                          </td>
-                          <td className="px-4 py-3 text-right font-mono font-semibold text-ink">
-                            {formatCurrency(item.valeur_stock_restant)}
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            <div className="flex items-center justify-center gap-1">
-                              <button
-                                onClick={() => goToSell(item.id)}
-                                className="p-1.5 rounded text-sage hover:bg-sage-pale transition-colors"
-                                title="Vendre"
-                              >
-                                <ShoppingCart className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={() => openEditModal(item)}
-                                className="p-1.5 rounded text-amber hover:bg-amber-pale transition-colors"
-                                title="Modifier"
-                              >
-                                <Pencil className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={() => setDeleteTarget(item)}
-                                className="p-1.5 rounded text-terracotta hover:bg-terracotta-pale transition-colors"
-                                title="Supprimer"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
+                              <span className="font-mono text-ink/40 text-[10px]"> /{item.qte_stock}</span>
+                            </td>
+                            {/* Prix vente */}
+                            <td className="px-3 py-2.5 text-right font-mono text-ink/70">
+                              {formatCurrency(item.prix_revente_unitaire)}
+                            </td>
+                            {/* Valeur stock restant */}
+                            <td className="px-3 py-2.5 text-right font-mono font-semibold text-ink">
+                              {formatCurrency(item.valeur_stock_restant)}
+                            </td>
+                            {/* Actions */}
+                            <td className="px-3 py-2.5 text-center">
+                              <div className="flex items-center justify-center gap-0.5">
+                                <button
+                                  onClick={() => goToSell(item.id)}
+                                  className="p-1.5 rounded text-sage hover:bg-sage-pale transition-colors"
+                                  title="Vendre"
+                                >
+                                  <ShoppingCart className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => openEditModal(item)}
+                                  className="p-1.5 rounded text-amber hover:bg-amber-pale transition-colors"
+                                  title="Modifier"
+                                >
+                                  <Pencil className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => setDeleteTarget(item)}
+                                  className="p-1.5 rounded text-terracotta hover:bg-terracotta-pale transition-colors"
+                                  title="Supprimer"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      })
+                    }
                     </tbody>
                   </table>
                 </div>
