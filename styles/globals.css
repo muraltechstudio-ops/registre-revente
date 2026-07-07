@@ -2,53 +2,62 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ─── Base ─── */
 body {
-  background: #EDE7D9;
-  color: #1C1715;
-  font-family: system-ui, -apple-system, sans-serif;
-  font-feature-settings: "tnum" on, "zero" on;
+  background: #0A0B0D;
+  color: #F4F5F7;
+  font-family: var(--font-sans), 'Space Grotesk', 'Inter', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* Double bar */
-.double-bar {
-  height: 3px;
-  background: #1C1715;
-  border-bottom: 1px solid #1C1715;
-  margin-bottom: 1px;
+/* ─── Tabular numbers for mono ─── */
+.font-mono, [class*="font-mono"] {
+  font-variant-numeric: tabular-nums;
 }
 
-/* Scroll */
-::-webkit-scrollbar { width: 5px; }
-::-webkit-scrollbar-thumb { background: #C89B3C; border-radius: 3px; }
+/* ─── Scrollbar ─── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #2A2E38; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #00E5A0; }
 
+/* ─── Input number reset ─── */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+input[type="number"] { -moz-appearance: textfield; }
+
+/* ─── Selection ─── */
+::selection { background: rgba(0, 229, 160, 0.2); color: #F4F5F7; }
+
+/* ─── Utility classes ─── */
 @layer components {
-  .btn-gold {
-    @apply bg-gold text-white px-5 py-2.5 rounded-lg text-sm font-medium
-           hover:bg-amber-600 active:scale-[0.98] transition-all duration-150
-           shadow-btn font-serif tracking-wide;
-  }
-  .btn-forest {
-    @apply bg-forest text-white px-5 py-2.5 rounded-lg text-sm font-medium
-           hover:bg-forestlight active:scale-[0.98] transition-all duration-150
-           shadow-btn font-serif tracking-wide;
+  .btn-primary {
+    @apply bg-accent text-base-950 px-5 py-2.5 rounded-lg text-sm font-semibold
+           hover:bg-accent/90 active:scale-[0.98] transition-all duration-150;
   }
   .btn-ghost {
-    @apply px-4 py-2 rounded-lg text-sm font-medium text-muted
-           hover:text-ink hover:bg-black/5 transition-all duration-150;
+    @apply text-ink-400 hover:text-ink-50 hover:bg-base-800 px-4 py-2 rounded-lg text-sm font-medium
+           transition-all duration-150;
   }
   .input-field {
-    @apply bg-white border border-border rounded-lg px-4 py-2.5 text-sm
-           focus:border-gold focus:ring-2 focus:ring-gold/15 outline-none
-           transition-all duration-150 text-ink placeholder:text-muted/40;
+    @apply bg-base-900 border border-base-700 rounded-lg px-4 py-2.5 text-sm text-ink-50
+           placeholder:text-ink-400/40 focus:border-accent/50 focus:ring-1 focus:ring-accent/20
+           outline-none transition-all duration-200;
   }
-  .card {
-    @apply bg-card border border-border/60 rounded-xl shadow-card;
+  .card-dash {
+    @apply bg-base-900 border border-base-700 rounded-lg;
   }
-  .card-hover {
-    @apply card hover:shadow-card-hover transition-shadow duration-200;
+  .badge-cat {
+    @apply bg-base-800 border border-base-700 text-ink-400 text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded;
   }
-  .kpi-box {
-    @apply card p-5 border-l-4;
+  .badge-low {
+    @apply text-danger border border-danger/20 bg-danger/5 text-[10px] font-medium px-1.5 py-0.5 rounded;
+  }
+  .section-label {
+    @apply text-xs uppercase tracking-[0.15em] text-ink-400 font-sans;
+  }
+  .kpi-value {
+    @apply font-mono font-semibold tracking-[-0.02em];
   }
 }

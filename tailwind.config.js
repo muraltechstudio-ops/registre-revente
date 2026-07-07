@@ -7,28 +7,42 @@ module.exports = {
   theme: {
     extend: {
       fontFamily: {
-        serif: ['Georgia', 'Constantia', 'Times New Roman', 'serif'],
-        mono: ['"IBM Plex Mono"', 'ui-monospace', 'SFMono-Regular', 'monospace'],
+        sans: ['var(--font-sans)', 'Space Grotesk', 'Inter', 'sans-serif'],
+        mono: ['var(--font-mono)', 'JetBrains Mono', 'ui-monospace', 'monospace'],
       },
       colors: {
-        page: '#EDE7D9',
-        card: '#FCF9F2',
-        ink: '#1C1715',
-        muted: '#7A7265',
-        gold: '#C89B3C',
-        goldlight: '#E8D5A0',
-        forest: '#2D4A3E',
-        forestlight: '#4A7A5F',
-        rust: '#A8432F',
-        rustlight: '#F0DCD8',
-        navy: '#1A1F2B',
-        navyLight: '#2D3445',
-        border: '#D4CDBC',
+        base: {
+          950: '#0A0B0D',
+          900: '#111318',
+          800: '#1B1E25',
+          700: '#2A2E38',
+        },
+        ink: {
+          50: '#F4F5F7',
+          400: '#8B92A3',
+        },
+        accent: {
+          DEFAULT: '#00E5A0',
+          dim: '#00A876',
+        },
+        danger: '#FF5C72',
       },
-      boxShadow: {
-        'card': '0 2px 8px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04)',
-        'card-hover': '0 8px 24px rgba(0,0,0,0.12)',
-        'btn': '0 1px 3px rgba(0,0,0,0.15)',
+      backgroundImage: {
+        'shimmer': 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.04) 50%, transparent 100%)',
+      },
+      keyframes: {
+        shimmer: {
+          '0%': { backgroundPosition: '-200% 0' },
+          '100%': { backgroundPosition: '200% 0' },
+        },
+        'pulse-slow': {
+          '0%, 100%': { opacity: '1' },
+          '50%': { opacity: '0.5' },
+        },
+      },
+      animation: {
+        shimmer: 'shimmer 1.5s infinite linear',
+        'pulse-slow': 'pulse-slow 2s ease-in-out infinite',
       },
     },
   },

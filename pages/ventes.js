@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useRouter } from 'next/router'
+import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '../lib/supabaseClient'
 import { exportToCSV } from '../lib/csvExport'
 import AuthGuard from '../components/AuthGuard'
 import Layout from '../components/Layout'
+import MagneticButton from '../components/MagneticButton'
 import toast from 'react-hot-toast'
 import { Plus, Search, Download, Trash2, Receipt, Package, Building2, ChevronDown, Truck, ExternalLink } from 'lucide-react'
 
@@ -12,11 +14,11 @@ const PLATE_F = ['Toutes', ...PLATES]
 const STATS = ['À expédier','Expédié','Livré','Litige/Retour','Annulé']
 const STAT_F = ['Tous', ...STATS]
 const STAT_CLR = {
-  'À expédier': 'bg-amber-100 text-amber-800 border-amber-200',
-  'Expédié': 'bg-blue-100 text-blue-700 border-blue-200',
-  'Livré': 'bg-green-100 text-green-700 border-green-200',
-  'Litige/Retour': 'bg-red-100 text-red-700 border-red-200',
-  'Annulé': 'bg-gray-100 text-gray-400 border-gray-200 line-through',
+  'À expédier': 'text-amber-400 border-amber-400/30 bg-amber-400/5',
+  'Expédié': 'text-blue-400 border-blue-400/30 bg-blue-400/5',
+  'Livré': 'text-accent border-accent/30 bg-accent/5',
+  'Litige/Retour': 'text-danger border-danger/30 bg-danger/5',
+  'Annulé': 'text-ink-400 border-base-700 bg-base-800',
 }
 const EMPTY = {
   stock_id: '', produit: '', categorie: '', prix_achat_unitaire: '', prix_revente_unitaire: '',
@@ -25,6 +27,8 @@ const EMPTY = {
 }
 const CFMT = (v) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v)
 const TODAY = () => new Date().toISOString().split('T')[0]
+
+function Skeleton({ className }) { return <div className={`bg-base-800 bg-shimmer bg-[length:200%_100%] animate-shimmer rounded-lg ${className}`} /> }
 
 export default function VentesPage() {
   const router = useRouter()
@@ -56,17 +60,13 @@ export default function VentesPage() {
       ])
       if (sr.error) throw new Error(sr.error.message)
       if (vr.error) throw new Error(vr.error.message)
-      setStock(sr.data ?? [])
-      setVentes(vr.data ?? [])
-    } catch (err) {
-      console.error(err)
-      toast.error('Erreur: ' + err.message)
-    } finally { setLoading(false) }
+      setStock(sr.data ?? []); setVentes(vr.data ?? [])
+    } catch (err) { console.error(err); toast.error('Erreur: ' + err.message) }
+    finally { setLoading(false) }
   }, [])
 
   useEffect(() => { fetch() }, [fetch])
 
-  // Pre-select from URL
   useEffect(() => {
     if (!loading && router.query.produit && !preselect) {
       const item = stock.find(s => s.id === router.query.produit)
@@ -101,8 +101,7 @@ export default function VentesPage() {
       if (error) throw new Error(error.message)
       toast.success('Vente enregistrée')
       setForm({ ...EMPTY, date_vente: TODAY() })
-      setPreselect(false)
-      await fetch()
+      setPreselect(false); await fetch()
     } catch (err) { toast.error(err.message) }
   }
 
@@ -137,251 +136,255 @@ export default function VentesPage() {
 
   const csv = () => {
     const cols = [
-      { key: 'date_vente', label: 'Date' },
-      { key: 'produit', label: 'Produit' },
-      { key: 'categorie', label: 'Catégorie' },
-      { key: 'plateforme', label: 'Plateforme' },
-      { key: 'statut', label: 'Statut' },
-      { key: 'numero_suivi', label: 'N° Suivi' },
-      { key: 'lien_vente', label: 'Lien vente' },
-      { key: 'qte_vendue', label: 'Qté' },
+      { key: 'date_vente', label: 'Date' }, { key: 'produit', label: 'Produit' },
+      { key: 'categorie', label: 'Catégorie' }, { key: 'plateforme', label: 'Plateforme' },
+      { key: 'statut', label: 'Statut' }, { key: 'numero_suivi', label: 'N° Suivi' },
+      { key: 'lien_vente', label: 'Lien vente' }, { key: 'qte_vendue', label: 'Qté' },
       { key: 'prix_achat_unitaire', label: 'Achat', format: v => CFMT(v) },
       { key: 'prix_revente_unitaire', label: 'Vente', format: v => CFMT(v) },
       { key: 'benefice', label: 'Bénéfice', format: v => CFMT(v) },
-      { key: 'client_prenom', label: 'Prénom' },
-      { key: 'client_nom', label: 'Nom' },
+      { key: 'client_prenom', label: 'Prénom' }, { key: 'client_nom', label: 'Nom' },
       { key: 'client_adresse', label: 'Adresse' },
     ]
-    const data = filtered.map(v => ({
-      ...v,
-      benefice: (Number.parseFloat(v.prix_revente_unitaire) - Number.parseFloat(v.prix_achat_unitaire)) * v.qte_vendue,
-    }))
+    const data = filtered.map(v => ({ ...v, benefice: (Number.parseFloat(v.prix_revente_unitaire) - Number.parseFloat(v.prix_achat_unitaire)) * v.qte_vendue }))
     exportToCSV({ data, filename: 'ventes.csv', columns: cols })
     toast.success('Export téléchargé')
   }
 
-  if (loading) return <AuthGuard><Layout><SkelV /></Layout></AuthGuard>
+  if (loading) return <AuthGuard><Layout><VentesSkeleton /></Layout></AuthGuard>
 
   return (
     <AuthGuard>
       <Layout>
-        <h1 className="font-serif text-2xl font-bold text-ink tracking-tight mb-1">Ventes</h1>
-        <div className="double-bar mb-6" />
-
-        {/* Formulaire */}
-        <div className="card p-4 sm:p-6 mb-6 shadow-md">
-          <div className="flex items-center gap-2 mb-5">
-            <div className="w-8 h-8 rounded-lg bg-navy flex items-center justify-center"><Plus className="w-4 h-4 text-goldlight" /></div>
-            <h2 className="font-serif text-lg font-bold text-ink">Nouvelle vente</h2>
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
+          {/* Header */}
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-1 h-6 bg-accent rounded-full" />
+            <h1 className="font-mono text-base tracking-wider uppercase text-ink-50 font-semibold">Ventes</h1>
           </div>
-          <form onSubmit={submit}>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-4">
-              <div className="space-y-4">
-                <p className="text-xs font-semibold text-muted uppercase tracking-wider font-serif">Produit & vente</p>
-                <div>
-                  <label className="block text-sm font-medium text-muted mb-1">Produit</label>
-                  <select value={form.stock_id} onChange={e => handleProd(e.target.value)} className="input-field w-full">
-                    <option value="">— Sélectionner —</option>
-                    {stock.map(item => <option key={item.id} value={item.id}>{item.produit}</option>)}
-                  </select>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div><label className="block text-sm font-medium text-muted mb-1">Achat (€)</label>
-                    <input type="number" step="0.01" min="0" required value={form.prix_achat_unitaire} onChange={e => setForm(f => ({ ...f, prix_achat_unitaire: e.target.value }))} className="input-field w-full font-mono" /></div>
-                  <div><label className="block text-sm font-medium text-muted mb-1">Vente (€)</label>
-                    <input type="number" step="0.01" min="0" required value={form.prix_revente_unitaire} onChange={e => setForm(f => ({ ...f, prix_revente_unitaire: e.target.value }))} className="input-field w-full font-mono" /></div>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div><label className="block text-sm font-medium text-muted mb-1">Quantité</label>
-                    <input type="number" min="1" required value={form.qte_vendue} onChange={e => setForm(f => ({ ...f, qte_vendue: e.target.value }))} className="input-field w-full font-mono" />
-                    {exceed && <p className="text-xs text-rust mt-1">⚠ {restQ} restant(s)</p>}
-                  </div>
-                  <div><label className="block text-sm font-medium text-muted mb-1">Plateforme</label>
-                    <select value={form.plateforme} onChange={e => setForm(f => ({ ...f, plateforme: e.target.value }))} className="input-field w-full">
-                      {PLATES.map(p => <option key={p} value={p}>{p}</option>)}
-                    </select>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div><label className="block text-sm font-medium text-muted mb-1">Statut</label>
-                    <select value={form.statut} onChange={e => setForm(f => ({ ...f, statut: e.target.value }))} className="input-field w-full">
-                      {STATS.map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                  </div>
-                  <div><label className="block text-sm font-medium text-muted mb-1">Date</label>
-                    <input type="date" required value={form.date_vente} onChange={e => setForm(f => ({ ...f, date_vente: e.target.value }))} className="input-field w-full" />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div><label className="block text-sm font-medium text-muted mb-1 flex items-center gap-1"><Truck className="w-3.5 h-3.5" />Suivi</label>
-                    <input type="text" value={form.numero_suivi} onChange={e => setForm(f => ({ ...f, numero_suivi: e.target.value }))} className="input-field w-full font-mono" placeholder="COL123" />
-                  </div>
-                  <div><label className="block text-sm font-medium text-muted mb-1 flex items-center gap-1"><ExternalLink className="w-3.5 h-3.5" />Lien</label>
-                    <input type="url" value={form.lien_vente} onChange={e => setForm(f => ({ ...f, lien_vente: e.target.value }))} className="input-field w-full" placeholder="https://..." />
-                  </div>
-                </div>
-              </div>
-              <div className="space-y-4">
-                <p className="text-xs font-semibold text-muted uppercase tracking-wider font-serif">Client (opt.)</p>
-                <div><label className="block text-sm font-medium text-muted mb-1">Prénom</label>
-                  <input type="text" value={form.client_prenom} onChange={e => setForm(f => ({ ...f, client_prenom: e.target.value }))} className="input-field w-full" placeholder="Jean" /></div>
-                <div><label className="block text-sm font-medium text-muted mb-1">Nom</label>
-                  <input type="text" value={form.client_nom} onChange={e => setForm(f => ({ ...f, client_nom: e.target.value }))} className="input-field w-full" placeholder="Dupont" /></div>
-                <div><label className="block text-sm font-medium text-muted mb-1">Adresse</label>
-                  <input type="text" value={form.client_adresse} onChange={e => setForm(f => ({ ...f, client_adresse: e.target.value }))} className="input-field w-full" placeholder="12 rue de Paris" /></div>
-                <div className="pt-2"><button type="submit" className="btn-forest w-full">Enregistrer</button></div>
-              </div>
+
+          {/* Formulaire */}
+          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
+            className="card-dash p-4 sm:p-6 mb-6">
+            <div className="flex items-center gap-2 mb-5">
+              <div className="w-6 h-6 rounded-md bg-accent/10 flex items-center justify-center"><Plus className="w-3.5 h-3.5 text-accent" /></div>
+              <h2 className="text-sm font-semibold text-ink-50 font-sans">Nouvelle vente</h2>
             </div>
-          </form>
-        </div>
+            <form onSubmit={submit}>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-4">
+                <div className="space-y-4">
+                  <p className="section-label">Produit & vente</p>
+                  <div>
+                    <label className="block text-xs font-medium text-ink-400 mb-1 font-sans">Produit</label>
+                    <select value={form.stock_id} onChange={e => handleProd(e.target.value)} className="input-field w-full">
+                      <option value="">— Sélectionner —</option>
+                      {stock.map(item => <option key={item.id} value={item.id}>{item.produit}</option>)}
+                    </select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div><label className="block text-xs font-medium text-ink-400 mb-1 font-sans">Achat unitaire (€)</label>
+                      <input type="number" step="0.01" min="0" required value={form.prix_achat_unitaire} onChange={e => setForm(f => ({ ...f, prix_achat_unitaire: e.target.value }))} className="input-field w-full font-mono" /></div>
+                    <div><label className="block text-xs font-medium text-ink-400 mb-1 font-sans">Vente unitaire (€)</label>
+                      <input type="number" step="0.01" min="0" required value={form.prix_revente_unitaire} onChange={e => setForm(f => ({ ...f, prix_revente_unitaire: e.target.value }))} className="input-field w-full font-mono" /></div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div><label className="block text-xs font-medium text-ink-400 mb-1 font-sans">Quantité</label>
+                      <input type="number" min="1" required value={form.qte_vendue} onChange={e => setForm(f => ({ ...f, qte_vendue: e.target.value }))} className="input-field w-full font-mono" />
+                      {exceed && <p className="text-xs text-danger mt-1">⚠ {restQ} restant(s)</p>}
+                    </div>
+                    <div><label className="block text-xs font-medium text-ink-400 mb-1 font-sans">Plateforme</label>
+                      <select value={form.plateforme} onChange={e => setForm(f => ({ ...f, plateforme: e.target.value }))} className="input-field w-full">
+                        {PLATES.map(p => <option key={p} value={p}>{p}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div><label className="block text-xs font-medium text-ink-400 mb-1 font-sans">Statut</label>
+                      <select value={form.statut} onChange={e => setForm(f => ({ ...f, statut: e.target.value }))} className="input-field w-full">
+                        {STATS.map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    </div>
+                    <div><label className="block text-xs font-medium text-ink-400 mb-1 font-sans">Date</label>
+                      <input type="date" required value={form.date_vente} onChange={e => setForm(f => ({ ...f, date_vente: e.target.value }))} className="input-field w-full" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div><label className="block text-xs font-medium text-ink-400 mb-1 flex items-center gap-1 font-sans"><Truck className="w-3 h-3" />Suivi <span className="text-ink-400/40">(opt.)</span></label>
+                      <input type="text" value={form.numero_suivi} onChange={e => setForm(f => ({ ...f, numero_suivi: e.target.value }))} className="input-field w-full font-mono" placeholder="COL123" />
+                    </div>
+                    <div><label className="block text-xs font-medium text-ink-400 mb-1 flex items-center gap-1 font-sans"><ExternalLink className="w-3 h-3" />Lien <span className="text-ink-400/40">(opt.)</span></label>
+                      <input type="url" value={form.lien_vente} onChange={e => setForm(f => ({ ...f, lien_vente: e.target.value }))} className="input-field w-full" placeholder="https://..." />
+                    </div>
+                  </div>
+                </div>
+                <div className="space-y-4">
+                  <p className="section-label">Client <span className="text-ink-400/40 normal-case">(opt.)</span></p>
+                  <div><label className="block text-xs font-medium text-ink-400 mb-1 font-sans">Prénom</label>
+                    <input type="text" value={form.client_prenom} onChange={e => setForm(f => ({ ...f, client_prenom: e.target.value }))} className="input-field w-full" placeholder="Jean" /></div>
+                  <div><label className="block text-xs font-medium text-ink-400 mb-1 font-sans">Nom</label>
+                    <input type="text" value={form.client_nom} onChange={e => setForm(f => ({ ...f, client_nom: e.target.value }))} className="input-field w-full" placeholder="Dupont" /></div>
+                  <div><label className="block text-xs font-medium text-ink-400 mb-1 font-sans">Adresse</label>
+                    <input type="text" value={form.client_adresse} onChange={e => setForm(f => ({ ...f, client_adresse: e.target.value }))} className="input-field w-full" placeholder="12 rue de Paris" /></div>
+                  <div className="pt-2"><MagneticButton as="button" type="submit" className="btn-primary w-full justify-center">Enregistrer</MagneticButton></div>
+                </div>
+              </div>
+            </form>
+          </motion.div>
 
-        {/* Filters */}
-        <div className="flex flex-col sm:flex-row flex-wrap gap-3 mb-4 items-end">
-          <div className="relative flex-1 min-w-[140px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted/30" />
-            <input value={sq} onChange={e => setSq(e.target.value)} placeholder="Rechercher…" className="input-field w-full pl-10" />
+          {/* Filters */}
+          <div className="flex flex-col sm:flex-row flex-wrap gap-3 mb-4 items-end">
+            <div className="relative flex-1 min-w-[140px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-400/30" />
+              <input value={sq} onChange={e => setSq(e.target.value)} placeholder="Rechercher…" className="input-field w-full pl-10" />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <select value={pf} onChange={e => setPf(e.target.value)} className="input-field text-xs px-3 py-2">{PLATE_F.map(p => <option key={p} value={p}>{p}</option>)}</select>
+              <select value={sf} onChange={e => setSf(e.target.value)} className="input-field text-xs px-3 py-2">{STAT_F.map(s => <option key={s} value={s}>{s}</option>)}</select>
+              <input type="date" value={d1} onChange={e => setD1(e.target.value)} className="input-field text-xs px-3 py-2" />
+              <input type="date" value={d2} onChange={e => setD2(e.target.value)} className="input-field text-xs px-3 py-2" />
+            </div>
+            <MagneticButton as="button" onClick={csv} disabled={filtered.length === 0} className="btn-primary text-xs gap-2 disabled:opacity-40">
+              <Download className="w-3.5 h-3.5" /> CSV
+            </MagneticButton>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <select value={pf} onChange={e => setPf(e.target.value)} className="input-field text-sm px-3 py-2">{PLATE_F.map(p => <option key={p} value={p}>{p}</option>)}</select>
-            <select value={sf} onChange={e => setSf(e.target.value)} className="input-field text-sm px-3 py-2">{STAT_F.map(s => <option key={s} value={s}>{s}</option>)}</select>
-            <input type="date" value={d1} onChange={e => setD1(e.target.value)} className="input-field text-sm px-3 py-2" />
-            <input type="date" value={d2} onChange={e => setD2(e.target.value)} className="input-field text-sm px-3 py-2" />
-          </div>
-          <button onClick={csv} disabled={filtered.length === 0} className="btn-gold text-xs flex items-center gap-2 disabled:opacity-50">
-            <Download className="w-3.5 h-3.5" /> CSV
-          </button>
-        </div>
 
-        {filtered.length === 0 ? (
-          <div className="card p-12 text-center">
-            <Receipt className="w-10 h-10 text-muted/20 mx-auto mb-3" />
-            <p className="text-base text-muted/60 font-serif italic">Aucune vente trouvée</p>
-          </div>
-        ) : (
-          <>
-            {/* Desktop */}
-            <div className="hidden sm:block card overflow-hidden">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border/50 bg-ink/[0.02]">
-                    <th className="text-left px-4 py-3 font-serif font-bold text-xs text-muted">Date</th>
-                    <th className="text-left px-4 py-3 font-serif font-bold text-xs text-muted">Produit</th>
-                    <th className="text-center px-4 py-3 font-serif font-bold text-xs text-muted">Statut</th>
-                    <th className="text-left px-4 py-3 font-serif font-bold text-xs text-muted">Plateforme</th>
-                    <th className="text-right px-4 py-3 font-serif font-bold text-xs text-muted">Qté</th>
-                    <th className="text-right px-4 py-3 font-serif font-bold text-xs text-muted">Achat</th>
-                    <th className="text-right px-4 py-3 font-serif font-bold text-xs text-muted">Vente</th>
-                    <th className="text-right px-4 py-3 font-serif font-bold text-xs text-muted">Bénéfice</th>
-                    <th className="text-center px-4 py-3"></th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/30">
-                  {filtered.map((v, idx) => {
+          {filtered.length === 0 ? (
+            <div className="card-dash p-12 text-center">
+              <Receipt className="w-10 h-10 text-ink-400/20 mx-auto mb-3" />
+              <p className="text-sm text-ink-400/60">Aucune vente trouvée</p>
+            </div>
+          ) : (
+            <>
+              {/* Desktop table */}
+              <div className="hidden sm:block card-dash overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-base-700 bg-base-900/50">
+                      <th className="text-left px-4 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium">Date</th>
+                      <th className="text-left px-4 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium">Produit</th>
+                      <th className="text-center px-4 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium">Statut</th>
+                      <th className="text-left px-4 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium">Plateforme</th>
+                      <th className="text-right px-4 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium">Qté</th>
+                      <th className="text-right px-4 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium">Achat</th>
+                      <th className="text-right px-4 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium">Vente</th>
+                      <th className="text-right px-4 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium">Bénéfice</th>
+                      <th className="text-center px-4 py-3"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-base-700/50">
+                    <AnimatePresence mode="popLayout">
+                      {filtered.map((v, idx) => {
+                        const pu = Number(v.prix_achat_unitaire), pv = Number(v.prix_revente_unitaire)
+                        const bt = (pv - pu) * v.qte_vendue, isB = bt >= 0
+                        const st = v.statut || 'À expédier'
+                        return (
+                          <motion.tr key={v.id} layout initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}
+                            transition={{ duration: 0.2, delay: idx * 0.02 }} className="hover:bg-base-800/50 transition-colors">
+                            <td className="px-4 py-3 font-mono text-xs text-ink-400 whitespace-nowrap">{v.date_vente}</td>
+                            <td className="px-4 py-3">
+                              <span className="font-medium text-ink-50">{v.produit}</span>
+                              {v.numero_suivi && <span className="ml-2 text-[10px] text-ink-400/50 bg-base-800 px-1.5 py-0.5 rounded inline-flex items-center gap-0.5"><Truck className="w-2.5 h-2.5" />{v.numero_suivi}</span>}
+                              {v.lien_vente && <a href={v.lien_vente} target="_blank" rel="noopener noreferrer" className="block text-[10px] text-accent/60 hover:text-accent mt-0.5 flex items-center gap-0.5"><ExternalLink className="w-2.5 h-2.5" />Annonce</a>}
+                            </td>
+                            <td className="px-4 py-3 text-center relative">
+                              <div ref={openStat === v.id ? menuRef : null}>
+                                <button onClick={() => setOpenStat(openStat === v.id ? null : v.id)}
+                                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${STAT_CLR[st] || 'text-ink-400 border-base-700 bg-base-800'}`}>
+                                  {st}<ChevronDown className="w-3 h-3" />
+                                </button>
+                                {openStat === v.id && (
+                                  <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 z-50 card-dash shadow-lg py-1 min-w-[120px]" onClick={e => e.stopPropagation()}>
+                                    {STATS.map(s => (
+                                      <button key={s} onClick={() => updateStat(v.id, s)}
+                                        className={`block w-full text-left px-3 py-1.5 text-xs hover:bg-base-800 ${s === st ? 'font-bold text-accent' : 'text-ink-400'}`}>{s}</button>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-ink-400">{v.plateforme}</td>
+                            <td className="px-4 py-3 text-right font-mono text-ink-400">{v.qte_vendue}</td>
+                            <td className="px-4 py-3 text-right font-mono text-ink-400">{CFMT(pu)}</td>
+                            <td className="px-4 py-3 text-right font-mono text-ink-400">{CFMT(pv)}</td>
+                            <td className={`px-4 py-3 text-right font-mono font-bold ${isB ? 'text-accent' : 'text-danger'}`}>{CFMT(bt)}</td>
+                            <td className="px-4 py-3 text-center">
+                              <button onClick={() => delVente(v.id)} className="p-1.5 rounded-lg text-ink-400 hover:text-danger hover:bg-base-800 transition-all"><Trash2 className="w-3.5 h-3.5" /></button>
+                            </td>
+                          </motion.tr>
+                        )
+                      })}
+                    </AnimatePresence>
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t border-base-700 bg-base-900/50">
+                      <td colSpan={7} className="px-4 py-3 text-right text-xs text-ink-400">Total lignes filtrées</td>
+                      <td className={`px-4 py-3 text-right font-mono font-bold ${totalBen >= 0 ? 'text-accent' : 'text-danger'}`}>{CFMT(totalBen)}</td>
+                      <td />
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+
+              {/* Mobile cards */}
+              <div className="sm:hidden space-y-3">
+                <AnimatePresence mode="popLayout">
+                  {filtered.map(v => {
                     const pu = Number(v.prix_achat_unitaire), pv = Number(v.prix_revente_unitaire)
-                    const bu = pv - pu, bt = bu * v.qte_vendue, isB = bu >= 0
+                    const bt = (pv - pu) * v.qte_vendue, isB = bt >= 0
                     const st = v.statut || 'À expédier'
                     return (
-                      <tr key={v.id} className={`${idx % 2 === 0 ? 'bg-card' : 'bg-ink/[0.015]'} hover:bg-gold/5 transition-colors`}>
-                        <td className="px-4 py-3 font-mono text-xs text-muted whitespace-nowrap">{v.date_vente}</td>
-                        <td className="px-4 py-3">
-                          <span className="font-medium text-ink">{v.produit}</span>
-                          {v.numero_suivi && <span className="ml-2 text-[10px] text-muted/50 bg-ink/5 px-1.5 py-0.5 rounded inline-flex items-center gap-0.5"><Truck className="w-2.5 h-2.5" />{v.numero_suivi}</span>}
-                          {v.lien_vente && <a href={v.lien_vente} target="_blank" rel="noopener noreferrer" className="block text-[10px] text-forest/60 hover:text-forest mt-0.5 flex items-center gap-0.5"><ExternalLink className="w-2.5 h-2.5" />Voir l&apos;annonce</a>}
-                        </td>
-                        <td className="px-4 py-3 text-center relative">
-                          <div ref={openStat === v.id ? menuRef : null}>
-                            <button onClick={() => setOpenStat(openStat === v.id ? null : v.id)}
-                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${STAT_CLR[st] || 'bg-gray-100 text-gray-600 border-gray-200'}`}>
-                              {st}<ChevronDown className="w-3 h-3" />
-                            </button>
-                            {openStat === v.id && (
-                              <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 z-50 card shadow-lg py-1 min-w-[120px]" onClick={e => e.stopPropagation()}>
-                                {STATS.map(s => (
-                                  <button key={s} onClick={() => updateStat(v.id, s)}
-                                    className={`block w-full text-left px-3 py-1.5 text-xs hover:bg-ink/5 ${s === st ? 'font-bold text-ink' : 'text-muted'}`}>{s}</button>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-muted">{v.plateforme}</td>
-                        <td className="px-4 py-3 text-right font-mono text-muted">{v.qte_vendue}</td>
-                        <td className="px-4 py-3 text-right font-mono text-muted">{CFMT(pu)}</td>
-                        <td className="px-4 py-3 text-right font-mono text-muted">{CFMT(pv)}</td>
-                        <td className={`px-4 py-3 text-right font-mono font-bold ${isB ? 'text-forest' : 'text-rust'}`}>{CFMT(bt)}</td>
-                        <td className="px-4 py-3 text-center">
-                          <button onClick={() => delVente(v.id)} className="p-1.5 rounded-lg text-muted/30 hover:text-rust hover:bg-rust/10 transition-all"><Trash2 className="w-3.5 h-3.5" /></button>
-                        </td>
-                      </tr>
+                      <motion.div key={v.id} layout initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
+                        className="card-dash p-4">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="font-medium text-ink-50 text-sm">{v.produit}</p>
+                          <button onClick={() => delVente(v.id)} className="p-1 text-ink-400 hover:text-danger"><Trash2 className="w-3.5 h-3.5" /></button>
+                        </div>
+                        <p className="text-xs text-ink-400 mt-0.5 font-mono">{v.date_vente}</p>
+                        <div className="flex items-center gap-2 mt-2">
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full border ${STAT_CLR[st] || 'text-ink-400 border-base-700 bg-base-800'}`}>{st}</span>
+                          <span className="text-xs text-ink-400">{v.plateforme}</span>
+                          {v.numero_suivi && <span className="text-[10px] text-ink-400/50 flex items-center gap-0.5"><Truck className="w-2.5 h-2.5" />{v.numero_suivi}</span>}
+                        </div>
+                        {v.lien_vente && <a href={v.lien_vente} target="_blank" rel="noopener noreferrer" className="text-xs text-accent/60 hover:text-accent flex items-center gap-1 mt-1"><ExternalLink className="w-3 h-3" />Annonce</a>}
+                        <div className="grid grid-cols-2 gap-2 mt-3 text-xs">
+                          <span className="text-ink-400">Qté: <strong className="font-mono text-ink-50">{v.qte_vendue}</strong></span>
+                          <span className="text-ink-400">Achat: <strong className="font-mono text-ink-400">{CFMT(pu)}</strong></span>
+                          <span className="text-ink-400">Vente: <strong className="font-mono text-ink-400">{CFMT(pv)}</strong></span>
+                        </div>
+                        <div className={`mt-2 pt-2 border-t border-base-700 flex justify-between text-xs font-bold ${isB ? 'text-accent' : 'text-danger'}`}>
+                          <span>Bénéfice</span><span className="font-mono">{CFMT(bt)}</span>
+                        </div>
+                      </motion.div>
                     )
                   })}
-                </tbody>
-                <tfoot>
-                  <tr className="border-t-2 border-ink/10 bg-ink/[0.02]">
-                    <td colSpan={7} className="px-4 py-3 text-right text-xs text-muted font-serif">Total lignes filtrées</td>
-                    <td className={`px-4 py-3 text-right font-mono font-bold ${totalBen >= 0 ? 'text-forest' : 'text-rust'}`}>{CFMT(totalBen)}</td>
-                    <td />
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-
-            {/* Mobile */}
-            <div className="sm:hidden space-y-3">
-              {filtered.map(v => {
-                const pu = Number(v.prix_achat_unitaire), pv = Number(v.prix_revente_unitaire)
-                const bt = (pv - pu) * v.qte_vendue, isB = bt >= 0
-                const st = v.statut || 'À expédier'
-                return (
-                  <div key={v.id} className="card p-4">
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="font-medium text-ink text-sm">{v.produit}</p>
-                      <button onClick={() => delVente(v.id)} className="p-1 text-muted/30 hover:text-rust"><Trash2 className="w-3.5 h-3.5" /></button>
-                    </div>
-                    <p className="text-xs text-muted mt-0.5 font-mono">{v.date_vente}</p>
-                    <div className="flex items-center gap-2 mt-2">
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full border ${STAT_CLR[st] || ''}`}>{st}</span>
-                      <span className="text-xs text-muted">{v.plateforme}</span>
-                      {v.numero_suivi && <span className="text-[10px] text-muted/50 flex items-center gap-0.5"><Truck className="w-2.5 h-2.5" />{v.numero_suivi}</span>}
-                    </div>
-                    {v.lien_vente && <a href={v.lien_vente} target="_blank" rel="noopener noreferrer" className="text-xs text-forest/60 hover:text-forest flex items-center gap-1 mt-1"><ExternalLink className="w-3 h-3" />Annonce</a>}
-                    <div className="grid grid-cols-2 gap-2 mt-3 text-xs">
-                      <span>Qté: <strong className="font-mono">{v.qte_vendue}</strong></span>
-                      <span>Achat: <strong className="font-mono">{CFMT(pu)}</strong></span>
-                      <span>Vente: <strong className="font-mono">{CFMT(pv)}</strong></span>
-                    </div>
-                    <div className={`mt-2 pt-2 border-t border-border/30 flex justify-between text-xs font-bold ${isB ? 'text-forest' : 'text-rust'}`}>
-                      <span>Bénéfice</span><span className="font-mono">{CFMT(bt)}</span>
-                    </div>
+                </AnimatePresence>
+                <div className="card-dash p-4 border border-accent/20">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium text-ink-400">Total</span>
+                    <span className={`font-mono font-bold text-lg ${totalBen >= 0 ? 'text-accent' : 'text-danger'}`}>{CFMT(totalBen)}</span>
                   </div>
-                )
-              })}
-              <div className="card p-4 border-2 border-forest/20">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-medium text-muted font-serif">Total</span>
-                  <span className={`font-mono font-bold text-lg ${totalBen >= 0 ? 'text-forest' : 'text-rust'}`}>{CFMT(totalBen)}</span>
                 </div>
               </div>
-            </div>
-          </>
-        )}
+            </>
+          )}
+        </motion.div>
       </Layout>
     </AuthGuard>
   )
 }
 
-function SkelV() {
+function VentesSkeleton() {
   return (
     <div className="space-y-4">
-      <div className="card p-6 space-y-4">
-        <div className="h-5 w-40 bg-ink/5 rounded animate-pulse" />
+      <div className="card-dash p-6 space-y-4">
+        <div className="h-5 w-40 bg-base-800 rounded animate-pulse" />
         <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-3">{[1,2,3,4].map(i => <div key={i} className="h-10 bg-ink/5 rounded animate-pulse" />)}</div>
-          <div className="space-y-3">{[1,2,3].map(i => <div key={i} className="h-10 bg-ink/5 rounded animate-pulse" />)}</div>
+          <div className="space-y-3">{[1,2,3,4].map(i => <div key={i} className="h-10 bg-base-800 rounded animate-pulse" />)}</div>
+          <div className="space-y-3">{[1,2,3].map(i => <div key={i} className="h-10 bg-base-800 rounded animate-pulse" />)}</div>
         </div>
       </div>
-      <div className="card p-4 space-y-3">
-        {[1,2,3].map(i => <div key={i} className="h-10 bg-ink/5 rounded animate-pulse" />)}
+      <div className="card-dash p-4 space-y-3">
+        {[1,2,3].map(i => <div key={i} className="h-12 bg-base-800 rounded animate-pulse" />)}
       </div>
     </div>
   )
