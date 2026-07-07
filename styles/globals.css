@@ -2,73 +2,53 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ─── Base ─── */
 body {
-  @apply bg-paper text-ink antialiased;
-  font-family: 'ui-sans-serif', system-ui, -apple-system, sans-serif;
+  background: #EDE7D9;
+  color: #1C1715;
+  font-family: system-ui, -apple-system, sans-serif;
   font-feature-settings: "tnum" on, "zero" on;
 }
 
-/* ─── Number inputs ─── */
-input[type="number"]::-webkit-inner-spin-button,
-input[type="number"]::-webkit-outer-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
+/* Double bar */
+.double-bar {
+  height: 3px;
+  background: #1C1715;
+  border-bottom: 1px solid #1C1715;
+  margin-bottom: 1px;
 }
-input[type="number"] { -moz-appearance: textfield; }
 
-/* ─── Scrollbar ─── */
-::-webkit-scrollbar { width: 6px; height: 6px; }
+/* Scroll */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-thumb { background: #C89B3C; border-radius: 3px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #D8D3C4; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #C17A2E; }
 
-/* ─── Double rule ─── */
-.double-rule {
-  border: none;
-  border-top: 2px solid #1C2B24;
-  border-bottom: 1px solid #1C2B24;
-  height: 4px;
-}
-
-/* ─── Utility components ─── */
 @layer components {
-  .card {
-    @apply bg-white rounded-xl border border-border/60 shadow-card;
+  .btn-gold {
+    @apply bg-gold text-white px-5 py-2.5 rounded-lg text-sm font-medium
+           hover:bg-amber-600 active:scale-[0.98] transition-all duration-150
+           shadow-btn font-serif tracking-wide;
   }
-  .card-hover {
-    @apply bg-white rounded-xl border border-border/60 shadow-card
-           hover:shadow-card-hover hover:border-border transition-all duration-200;
-  }
-  .input-field {
-    @apply border border-border rounded-lg px-3.5 py-2.5 text-sm bg-white
-           focus:border-sage/50 focus:ring-2 focus:ring-sage/10 outline-none
-           transition-all duration-200;
-  }
-  .btn-sage {
-    @apply bg-sage text-white px-5 py-2.5 rounded-lg text-sm font-medium
-           hover:bg-sage-light active:scale-[0.98] transition-all duration-150
-           shadow-btn hover:shadow-md;
-  }
-  .btn-amber {
-    @apply bg-amber text-white px-4 py-2 rounded-lg text-sm font-medium
-           hover:bg-amber-light active:scale-[0.98] transition-all duration-150
-           shadow-btn;
+  .btn-forest {
+    @apply bg-forest text-white px-5 py-2.5 rounded-lg text-sm font-medium
+           hover:bg-forestlight active:scale-[0.98] transition-all duration-150
+           shadow-btn font-serif tracking-wide;
   }
   .btn-ghost {
-    @apply px-4 py-2 rounded-lg text-sm font-medium text-ink/50
-           hover:bg-ink/5 hover:text-ink transition-all duration-150;
+    @apply px-4 py-2 rounded-lg text-sm font-medium text-muted
+           hover:text-ink hover:bg-black/5 transition-all duration-150;
   }
-  .badge {
-    @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium border;
+  .input-field {
+    @apply bg-white border border-border rounded-lg px-4 py-2.5 text-sm
+           focus:border-gold focus:ring-2 focus:ring-gold/15 outline-none
+           transition-all duration-150 text-ink placeholder:text-muted/40;
   }
-  .tab-chip {
-    @apply px-3.5 py-1.5 rounded-lg text-xs font-medium border transition-all duration-150;
+  .card {
+    @apply bg-card border border-border/60 rounded-xl shadow-card;
   }
-  .kpi-card {
-    @apply card p-4 flex items-start gap-3;
+  .card-hover {
+    @apply card hover:shadow-card-hover transition-shadow duration-200;
   }
-  .skeleton {
-    @apply bg-gradient-to-r from-ink/5 via-ink/10 to-ink/5 bg-[length:200%_100%] animate-pulse rounded-lg;
+  .kpi-box {
+    @apply card p-5 border-l-4;
   }
 }

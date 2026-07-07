@@ -7,19 +7,20 @@ export default function App({ Component, pageProps }) {
       <Component {...pageProps} />
       <Toaster
         position="bottom-right"
-        gutter={12}
+        gutter={10}
         toastOptions={{
           duration: 3000,
           style: {
-            background: '#1C2B24',
-            color: '#F7F5EF',
-            fontSize: '0.875rem',
-            borderRadius: '0.75rem',
-            fontFamily: 'ui-monospace, monospace',
+            background: '#1C1715',
+            color: '#FCF9F2',
+            fontSize: '0.8rem',
+            borderRadius: '0.625rem',
+            fontFamily: 'monospace',
             padding: '12px 16px',
+            border: '1px solid rgba(255,255,255,0.06)',
           },
-          success: { iconTheme: { primary: '#5B8C6A', secondary: '#F7F5EF' } },
-          error: { iconTheme: { primary: '#A8432F', secondary: '#F7F5EF' } },
+          success: { iconTheme: { primary: '#C89B3C', secondary: '#FCF9F2' } },
+          error: { iconTheme: { primary: '#A8432F', secondary: '#FCF9F2' } },
         }}
       />
     </>

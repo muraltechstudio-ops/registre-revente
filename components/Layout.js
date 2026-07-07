@@ -2,101 +2,87 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/router'
 import { supabase } from '../lib/supabaseClient'
-import { LayoutDashboard, Package, Receipt, LogOut, Menu, X } from 'lucide-react'
+import { LayoutDashboard, Package, Receipt, LogOut, Menu, X, ChevronRight } from 'lucide-react'
 
-const NAV_ITEMS = [
+const NAV = [
   { href: '/dashboard', label: 'Tableau de bord', icon: LayoutDashboard },
   { href: '/stock', label: 'Stock', icon: Package },
   { href: '/ventes', label: 'Ventes', icon: Receipt },
 ]
 
-const MONTHS = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre']
-
-function formatDate(date) {
-  const d = new Date(date)
-  return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`
-}
-
 export default function Layout({ children }) {
   const router = useRouter()
-  const [menuOpen, setMenuOpen] = useState(false)
+  const [open, setOpen] = useState(false)
   const [user, setUser] = useState(null)
 
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setUser(data?.user ?? null))
-  }, [])
+  useEffect(() => { supabase.auth.getUser().then(({ data }) => setUser(data?.user ?? null)) }, [])
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut()
-    router.replace('/login')
-  }
-
-  const isActive = (href) => router.pathname === href
-  const today = new Date()
+  const logout = async () => { await supabase.auth.signOut(); router.replace('/login') }
+  const active = (h) => router.pathname === h
 
   return (
-    <div className="min-h-screen flex flex-col md:flex-row bg-gradient-to-br from-paper via-[#F2EFE8] to-paper">
+    <div className="min-h-screen flex flex-col md:flex-row">
       {/* Mobile header */}
-      <div className="md:hidden fixed top-0 left-0 right-0 z-50 flex items-center justify-between bg-white border-b border-border/40 px-4 h-14">
-        <button onClick={() => setMenuOpen(!menuOpen)} className="p-2 -ml-2 rounded-lg text-ink hover:bg-ink/5 transition-colors">
+      <div className="md:hidden fixed top-0 left-0 right-0 z-50 flex items-center justify-between bg-navy px-4 h-14 shadow-md">
+        <button onClick={() => setOpen(!open)} className="p-1.5 rounded-lg text-goldlight hover:bg-white/10 transition-colors">
           <Menu className="w-5 h-5" />
         </button>
-        <span className="font-semibold text-base text-ink/80">Registre</span>
-        <div className="w-9" />
+        <span className="font-serif text-base text-goldlight tracking-wide">Registre</span>
+        <div className="w-8" />
       </div>
 
-      {/* Mobile overlay */}
-      {menuOpen && (
-        <div className="fixed inset-0 bg-black/10 z-40 md:hidden" onClick={() => setMenuOpen(false)} />
-      )}
+      {open && <div className="fixed inset-0 bg-black/40 z-40 md:hidden" onClick={() => setOpen(false)} />}
 
-      {/* Sidebar */}
-      <aside className={`fixed md:sticky top-0 left-0 z-50 h-dvh w-60 bg-white border-r border-border/40 flex flex-col transition-transform duration-200 ease-in-out ${menuOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}>
+      {/* Sidebar — dark navy distinctive */}
+      <aside className={`fixed md:sticky top-0 left-0 z-50 h-dvh w-64 bg-navy flex flex-col transition-transform duration-200 ${open ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 shadow-xl`}>
         <div className="md:hidden absolute top-2 right-2">
-          <button onClick={() => setMenuOpen(false)} className="p-2 rounded-lg text-ink/40 hover:text-ink hover:bg-ink/5 transition-colors">
+          <button onClick={() => setOpen(false)} className="p-1.5 rounded-lg text-goldlight/50 hover:text-goldlight transition-colors">
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Logo */}
-        <div className="px-4 pt-6 pb-4 border-b border-border/30">
-          <Link href="/dashboard" className="font-serif text-lg font-bold text-ink tracking-tight">
-            Registre de Revente
+        {/* Brand */}
+        <div className="px-6 pt-7 pb-5 border-b border-white/10">
+          <Link href="/dashboard" className="font-serif text-xl text-goldlight tracking-wide font-bold">
+            Registre
           </Link>
-          <p className="text-sm text-ink/40 mt-1">{formatDate(today)}</p>
+          <p className="font-serif text-xs text-white/30 mt-1 italic">Carnet de revente</p>
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 px-2 pt-4 space-y-0.5">
-          {NAV_ITEMS.map((item) => {
+        <nav className="flex-1 px-3 pt-5 space-y-1">
+          {NAV.map((item) => {
             const Icon = item.icon
-            const active = isActive(item.href)
+            const isActive = active(item.href)
             return (
-              <Link key={item.href} href={item.href} onClick={() => setMenuOpen(false)}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 ${
-                  active ? 'bg-sage text-white shadow-sm' : 'text-ink/50 hover:text-ink hover:bg-ink/5'
+              <Link key={item.href} href={item.href} onClick={() => setOpen(false)}
+                className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-150 ${
+                  isActive
+                    ? 'bg-gold/15 text-goldlight border-l-2 border-gold'
+                    : 'text-white/40 hover:text-white/70 hover:bg-white/5'
                 }`}>
                 <Icon className="w-4 h-4 shrink-0" />
-                {item.label}
+                <span>{item.label}</span>
+                {isActive && <ChevronRight className="w-3.5 h-3.5 ml-auto text-goldlight/50" />}
               </Link>
             )
           })}
         </nav>
 
-        {/* User + logout */}
-        <div className="px-2 pb-4 pt-3 border-t border-border/30">
-          {user && <p className="text-xs text-ink/30 truncate px-3 mb-2">{user.email}</p>}
-          <button onClick={handleLogout}
-            className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium text-terracotta/60 hover:text-terracotta hover:bg-terracotta/5 transition-all duration-150">
+        {/* User */}
+        <div className="px-3 pb-5 pt-4 border-t border-white/10">
+          {user && <p className="text-xs text-white/25 truncate px-4 mb-2">{user.email}</p>}
+          <button onClick={logout}
+            className="flex items-center gap-3 w-full px-4 py-2.5 rounded-lg text-sm font-medium text-rust/60 hover:text-rust hover:bg-white/5 transition-all duration-150">
             <LogOut className="w-4 h-4 shrink-0" />
             Déconnexion
           </button>
         </div>
       </aside>
 
-      {/* Main */}
+      {/* Content */}
       <main className="flex-1 min-h-screen pt-14 md:pt-0">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 sm:py-8">{children}</div>
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-5 sm:py-8">{children}</div>
       </main>
     </div>
   )
