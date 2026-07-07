@@ -184,8 +184,8 @@ export default function StockPage() {
                         <th className="text-right px-4 py-3 font-serif font-bold text-xs text-muted tracking-wider">Coût unitaire</th>
                         <th className="text-right px-4 py-3 font-serif font-bold text-xs text-muted tracking-wider">Coût total lot</th>
                         <th className="text-center px-4 py-3 font-serif font-bold text-xs text-muted tracking-wider">Stock</th>
-                        <th className="text-right px-4 py-3 font-serif font-bold text-xs text-muted tracking-wider">Vente</th>
-                        <th className="text-right px-4 py-3 font-serif font-bold text-xs text-muted tracking-wider">Valeur</th>
+                        <th className="text-right px-4 py-3 font-serif font-bold text-xs text-muted tracking-wider">Vente à l'unité</th>
+                        <th className="text-right px-4 py-3 font-serif font-bold text-xs text-muted tracking-wider">Total Vente</th>
                         <th className="text-center px-4 py-3 font-serif font-bold text-xs text-muted tracking-wider">Actions</th>
                       </tr>
                     </thead>
