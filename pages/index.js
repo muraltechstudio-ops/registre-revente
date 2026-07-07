@@ -12,8 +12,8 @@ export default function Home() {
   }, [router])
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-paper">
-      <div className="w-8 h-8 border-2 border-sage/30 border-t-sage rounded-full animate-spin" />
+    <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-paper via-[#F0EDE3] to-paper">
+      <div className="w-10 h-10 border-2 border-sage/30 border-t-sage rounded-full animate-spin" />
     </div>
   )
 }
