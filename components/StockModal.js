@@ -5,7 +5,8 @@ import { Upload, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 const CATS = ['Informatique','Mode','Bijoux','Moto','Papeterie/Bureau','Hygiène/Beauté','Stock existant','Autre']
-const EMPTY = { produit: '', categorie: 'Autre', prix_achat_unitaire: '', qte_stock: '', prix_revente_unitaire: '' }
+const PLATEFORMES_MARCHE = ['Vinted','Leboncoin','Facebook Marketplace','TikTok Shop','Temu','Whatnot','Vestiaire Collective','Autre']
+const EMPTY = { produit: '', categorie: 'Autre', prix_achat_unitaire: '', qte_stock: '', prix_revente_unitaire: '', plateforme_conseillee: 'Vinted' }
 const CFMT = (v) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v)
 
 export default function StockModal({ isOpen, onClose, onSave, item }) {
@@ -17,7 +18,13 @@ export default function StockModal({ isOpen, onClose, onSave, item }) {
 
   useEffect(() => {
     if (item) {
-      setF({ produit: item.produit ?? '', categorie: item.categorie ?? 'Autre', prix_achat_unitaire: item.prix_achat_unitaire?.toString() ?? '', qte_stock: item.qte_stock?.toString() ?? '', prix_revente_unitaire: item.prix_revente_unitaire?.toString() ?? '' })
+      setF({
+        produit: item.produit ?? '', categorie: item.categorie ?? 'Autre',
+        prix_achat_unitaire: item.prix_achat_unitaire?.toString() ?? '',
+        qte_stock: item.qte_stock?.toString() ?? '',
+        prix_revente_unitaire: item.prix_revente_unitaire?.toString() ?? '',
+        plateforme_conseillee: item.plateforme_conseillee || 'Vinted',
+      })
       setEp(item.photo_url ?? null)
     } else { setF(EMPTY); setEp(null) }
     setPf(null); setPp(null)
@@ -53,7 +60,14 @@ export default function StockModal({ isOpen, onClose, onSave, item }) {
         if (ue) { toast.error("Erreur upload"); setLoading(false); return }
         url = supabase.storage.from('produits-photos').getPublicUrl(fn).data.publicUrl
       }
-      await onSave({ produit: f.produit, categorie: f.categorie, prix_achat_unitaire: parseFloat(f.prix_achat_unitaire), qte_stock: parseInt(f.qte_stock, 10), prix_revente_unitaire: parseFloat(f.prix_revente_unitaire), photo_url: url })
+      await onSave({
+        produit: f.produit, categorie: f.categorie,
+        prix_achat_unitaire: parseFloat(f.prix_achat_unitaire),
+        qte_stock: parseInt(f.qte_stock, 10),
+        prix_revente_unitaire: parseFloat(f.prix_revente_unitaire),
+        plateforme_conseillee: f.plateforme_conseillee,
+        photo_url: url,
+      })
       onClose()
     } catch (err) { toast.error("Erreur") }
     finally { setLoading(false) }
@@ -125,7 +139,6 @@ export default function StockModal({ isOpen, onClose, onSave, item }) {
                   <input type="number" min="0" required value={f.qte_stock} onChange={chg('qte_stock')} className="input-field w-full font-mono" placeholder="0" />
                 </div>
               </div>
-              {/* Coût total lot aperçu */}
               {coutTotalLot !== null && (
                 <div className="bg-accent/5 border border-accent/20 rounded-lg px-4 py-3 flex items-center justify-between">
                   <span className="text-xs text-ink-400">Coût total par lot <span className="text-ink-400/40">(calculé)</span></span>
@@ -135,6 +148,13 @@ export default function StockModal({ isOpen, onClose, onSave, item }) {
               <div>
                 <label className="block text-xs font-medium text-ink-400 mb-1">Prix revente unitaire (€)</label>
                 <input type="number" step="0.01" min="0" required value={f.prix_revente_unitaire} onChange={chg('prix_revente_unitaire')} className="input-field w-full font-mono" placeholder="0.00" />
+              </div>
+              {/* Marketplace */}
+              <div>
+                <label className="block text-xs font-medium text-ink-400 mb-1">Marketplace conseillée</label>
+                <select value={f.plateforme_conseillee} onChange={chg('plateforme_conseillee')} className="input-field w-full">
+                  {PLATEFORMES_MARCHE.map(p => <option key={p} value={p}>{p}</option>)}
+                </select>
               </div>
 
               <div className="flex justify-end gap-3 pt-2 border-t border-base-700">

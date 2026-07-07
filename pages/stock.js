@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useRouter } from 'next/router'
 import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '../lib/supabaseClient'
@@ -8,9 +8,10 @@ import StockModal from '../components/StockModal'
 import CountUp from '../components/CountUp'
 import MagneticButton from '../components/MagneticButton'
 import toast from 'react-hot-toast'
-import { Package, Plus, Search, ShoppingCart, Pencil, Trash2, AlertTriangle, Box, Wallet, TrendingUp } from 'lucide-react'
+import { Package, Plus, Search, ShoppingCart, Pencil, Trash2, AlertTriangle, Box, TrendingUp, ChevronDown } from 'lucide-react'
 
 const CATS = ['Informatique','Mode','Bijoux','Moto','Papeterie/Bureau','Hygiène/Beauté','Stock existant','Autre']
+const PLATEFORMES_MARCHE = ['Vinted','Leboncoin','Facebook Marketplace','TikTok Shop','Temu','Whatnot','Vestiaire Collective','Autre']
 const CFMT = (v) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v)
 const LOW = 3
 
@@ -29,21 +30,28 @@ export default function StockPage() {
   const [modal, setModal] = useState(false)
   const [edit, setEdit] = useState(null)
   const [del, setDel] = useState(null)
+  const [openPlat, setOpenPlat] = useState(null)
+  const platRef = useRef(null)
+
+  /* ──── Fermeture menu inline au clic dehors ──── */
+  useEffect(() => {
+    const h = (e) => { if (platRef.current && !platRef.current.contains(e.target)) setOpenPlat(null) }
+    if (openPlat) document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [openPlat])
 
   const fetch = useCallback(async () => {
     setLoading(true); setError(null)
     try {
-      let data
       const r = await supabase.from('revente_stock_summary').select('*').order('produit')
-      if (r.error) {
-        console.warn('Summary view error:', r.error.message)
-        const r2 = await supabase.from('revente_stock').select('*').order('produit')
-        if (r2.error) throw new Error(r2.error.message)
-        data = (r2.data ?? []).map(i => ({ ...i, qte_vendue: 0, qte_restante: i.qte_stock, valeur_stock_restant: i.qte_stock * Number(i.prix_revente_unitaire), cout_total_lot: i.cout_total_lot ?? (i.qte_stock * Number(i.prix_achat_unitaire)) }))
-      } else { data = r.data ?? [] }
+      if (r.error) throw new Error(r.error.message)
       let photos = []
       try { const p = await supabase.from('revente_stock').select('id, photo_url'); if (!p.error) photos = p.data ?? [] } catch {}
-      setItems(data.map(i => ({ ...i, photo_url: photos.find(p => p.id === i.id)?.photo_url ?? null, cout_total_lot: i.cout_total_lot ?? (Number(i.prix_achat_unitaire) * Number(i.qte_stock)) })))
+      setItems((r.data ?? []).map(i => ({
+        ...i,
+        photo_url: photos.find(p => p.id === i.id)?.photo_url ?? null,
+        cout_total_lot: i.cout_total_lot ?? (Number(i.prix_achat_unitaire) * Number(i.qte_stock)),
+      })))
     } catch (err) { console.error(err); setError(err.message); toast.error('Erreur: ' + err.message) }
     finally { setLoading(false) }
   }, [])
@@ -57,6 +65,13 @@ export default function StockPage() {
     return r
   }, [items, cat, q])
 
+  /* ──── Totaux sur les lignes filtrées ──── */
+  const totals = useMemo(() => ({
+    coutTotal: filtered.reduce((s, i) => s + Number(i.cout_total_lot ?? 0), 0),
+    totalVente: filtered.reduce((s, i) => s + Number(i.valeur_stock_restant ?? 0), 0),
+    profit: filtered.reduce((s, i) => s + Number(i.profit_potentiel ?? 0), 0),
+  }), [filtered])
+
   const metrics = useMemo(() => ({
     val: items.reduce((s, i) => s + Number(i.valeur_stock_restant ?? 0), 0),
     qty: items.reduce((s, i) => s + Number(i.qte_stock ?? 0), 0),
@@ -67,6 +82,15 @@ export default function StockPage() {
   const addItem = async (fd) => { const { error } = await supabase.from('revente_stock').insert([fd]); if (error) throw error; toast.success('Article ajouté'); await fetch() }
   const editItem = async (fd) => { const { error } = await supabase.from('revente_stock').update(fd).eq('id', edit.id); if (error) throw error; toast.success('Article modifié'); await fetch() }
   const removeItem = async (id) => { const { error } = await supabase.from('revente_stock').delete().eq('id', id); if (error) { toast.error('Erreur'); return }; toast.success('Article supprimé'); setDel(null); await fetch() }
+
+  /* ──── Mise à jour inline plateforme_conseillee ──── */
+  const handlePlateformeUpdate = async (id, valeur) => {
+    const { error } = await supabase.from('revente_stock').update({ plateforme_conseillee: valeur }).eq('id', id)
+    if (error) { toast.error('Erreur'); return }
+    toast.success(`Marketplace: ${valeur}`)
+    setOpenPlat(null)
+    setItems(prev => prev.map(i => i.id === id ? { ...i, plateforme_conseillee: valeur } : i))
+  }
 
   return (
     <AuthGuard>
@@ -151,6 +175,8 @@ export default function StockPage() {
                           <th className="text-center px-4 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium">Stock</th>
                           <th className="text-right px-4 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium">Vente à l'unité</th>
                           <th className="text-right px-4 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium">Total Vente</th>
+                          <th className="text-right px-4 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium">Profit</th>
+                          <th className="text-center px-4 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium">Marketplace</th>
                           <th className="text-center px-4 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium">Actions</th>
                         </tr>
                       </thead>
@@ -159,6 +185,8 @@ export default function StockPage() {
                           {filtered.map((item, idx) => {
                             const isLow = item.qte_restante <= LOW
                             const coutLot = item.cout_total_lot ?? (Number(item.prix_achat_unitaire) * Number(item.qte_stock))
+                            const profit = Number(item.profit_potentiel ?? 0)
+                            const isProfitPos = profit >= 0
                             return (
                               <motion.tr
                                 key={item.id}
@@ -193,6 +221,30 @@ export default function StockPage() {
                                 </td>
                                 <td className="px-4 py-3 text-right font-mono text-ink-400">{CFMT(item.prix_revente_unitaire)}</td>
                                 <td className="px-4 py-3 text-right font-mono font-bold text-accent">{CFMT(item.valeur_stock_restant)}</td>
+                                {/* Profit */}
+                                <td className={`px-4 py-3 text-right font-mono font-bold ${isProfitPos ? 'text-accent' : 'text-danger'}`}>{CFMT(profit)}</td>
+                                {/* Marketplace editable inline */}
+                                <td className="px-4 py-3 text-center relative">
+                                  <div ref={openPlat === item.id ? platRef : null}>
+                                    <button
+                                      onClick={() => setOpenPlat(openPlat === item.id ? null : item.id)}
+                                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium border border-base-700 bg-base-800 text-ink-400 hover:border-accent/40 hover:text-accent transition-all"
+                                    >
+                                      {item.plateforme_conseillee || '–'}
+                                      <ChevronDown className="w-3 h-3" />
+                                    </button>
+                                    {openPlat === item.id && (
+                                      <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 z-50 card-dash shadow-lg py-1 min-w-[140px]" onClick={e => e.stopPropagation()}>
+                                        {PLATEFORMES_MARCHE.map(p => (
+                                          <button key={p} onClick={() => handlePlateformeUpdate(item.id, p)}
+                                            className={`block w-full text-left px-3 py-1.5 text-xs hover:bg-base-800 transition-colors ${
+                                              (item.plateforme_conseillee || '') === p ? 'font-bold text-accent' : 'text-ink-400'
+                                            }`}>{p}</button>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
                                 <td className="px-4 py-3 text-center">
                                   <div className="flex items-center justify-center gap-1">
                                     <button onClick={() => router.push(`/ventes?produit=${item.id}`)} className="p-1.5 rounded-lg text-ink-400 hover:text-accent hover:bg-base-800 transition-all" title="Vendre"><ShoppingCart className="w-3.5 h-3.5" /></button>
@@ -205,6 +257,26 @@ export default function StockPage() {
                           })}
                         </AnimatePresence>
                       </tbody>
+                      {/* ── Ligne de totaux ── */}
+                      <tfoot>
+                        <tr className="border-t-2 border-accent/30 bg-base-900/80">
+                          <td className="px-4 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium">Totaux</td>
+                          <td className="px-4 py-3" />
+                          <td className="px-4 py-3 text-right font-mono font-bold text-ink-50">
+                            <CountUp end={totals.coutTotal} decimals={2} prefix="€" />
+                          </td>
+                          <td className="px-4 py-3" />
+                          <td className="px-4 py-3" />
+                          <td className="px-4 py-3 text-right font-mono font-bold text-accent">
+                            <CountUp end={totals.totalVente} decimals={2} prefix="€" />
+                          </td>
+                          <td className={`px-4 py-3 text-right font-mono font-bold ${totals.profit >= 0 ? 'text-accent' : 'text-danger'}`}>
+                            <CountUp end={totals.profit} decimals={2} prefix="€" />
+                          </td>
+                          <td className="px-4 py-3" />
+                          <td className="px-4 py-3" />
+                        </tr>
+                      </tfoot>
                     </table>
                   </div>
 
@@ -214,6 +286,8 @@ export default function StockPage() {
                       {filtered.map(item => {
                         const isLow = item.qte_restante <= LOW
                         const coutLot = item.cout_total_lot ?? (Number(item.prix_achat_unitaire) * Number(item.qte_stock))
+                        const profit = Number(item.profit_potentiel ?? 0)
+                        const isProfitPos = profit >= 0
                         return (
                           <motion.div key={item.id} layout initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
                             className="card-dash p-4">
@@ -228,7 +302,8 @@ export default function StockPage() {
                               <span className="text-ink-400">Coût unitaire: <strong className="font-mono text-ink-400">{CFMT(item.prix_achat_unitaire)}</strong></span>
                               <span className="text-ink-400">Coût lot: <strong className="font-mono text-ink-50">{CFMT(coutLot)}</strong></span>
                               <span className="text-ink-400">Valeur: <strong className="font-mono text-accent">{CFMT(item.valeur_stock_restant)}</strong></span>
-                              <span className="text-ink-400">Vente: <strong className="font-mono text-ink-400">{CFMT(item.prix_revente_unitaire)}</strong></span>
+                              <span className="text-ink-400">Profit: <strong className={`font-mono ${isProfitPos ? 'text-accent' : 'text-danger'}`}>{CFMT(profit)}</strong></span>
+                              <span className="text-ink-400">Marketplace: <strong className="text-ink-50">{item.plateforme_conseillee || '–'}</strong></span>
                             </div>
                             <div className="flex gap-2 mt-3 pt-3 border-t border-base-700">
                               <button onClick={() => router.push(`/ventes?produit=${item.id}`)} className="flex-1 bg-accent text-base-950 text-xs font-semibold rounded-lg py-2 hover:bg-accent/90 transition-all">Vendre</button>
@@ -239,6 +314,26 @@ export default function StockPage() {
                         )
                       })}
                     </AnimatePresence>
+                    {/* Totaux mobile */}
+                    <div className="card-dash p-4 border border-accent/20">
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs text-ink-400 font-sans font-medium uppercase tracking-wider">Totaux</span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 mt-2 text-xs">
+                        <div>
+                          <span className="text-ink-400">Coût lots</span>
+                          <p className="font-mono font-bold text-ink-50"><CountUp end={totals.coutTotal} decimals={2} prefix="€" /></p>
+                        </div>
+                        <div>
+                          <span className="text-ink-400">Total Vente</span>
+                          <p className="font-mono font-bold text-accent"><CountUp end={totals.totalVente} decimals={2} prefix="€" /></p>
+                        </div>
+                        <div>
+                          <span className="text-ink-400">Profit</span>
+                          <p className={`font-mono font-bold ${totals.profit >= 0 ? 'text-accent' : 'text-danger'}`}><CountUp end={totals.profit} decimals={2} prefix="€" /></p>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </>
               )}
