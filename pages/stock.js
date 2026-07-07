@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/router'
 import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '../lib/supabaseClient'
@@ -8,10 +8,10 @@ import StockModal from '../components/StockModal'
 import CountUp from '../components/CountUp'
 import MagneticButton from '../components/MagneticButton'
 import toast from 'react-hot-toast'
-import { Package, Plus, Search, ShoppingCart, Pencil, Trash2, AlertTriangle, Box, TrendingUp, ChevronDown } from 'lucide-react'
+import { Package, Plus, Search, ShoppingCart, Pencil, Trash2, AlertTriangle, Box, TrendingUp, Check, X } from 'lucide-react'
 
 const CATS = ['Informatique','Mode','Bijoux','Moto','Papeterie/Bureau','Hygiène/Beauté','Stock existant','Autre']
-const PLATEFORMES_MARCHE = ['Vinted','Leboncoin','Facebook Marketplace','TikTok Shop','Temu','Whatnot','Vestiaire Collective','Autre']
+const SUGGESTIONS_MARCHE = ['Vinted', 'Leboncoin', 'Leboncoin Pro', 'Vinted Pro', 'Facebook Marketplace', 'TikTok Shop', 'Vestiaire Collective', 'Joli Closet', 'Whatnot']
 const CFMT = (v) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v)
 const LOW = 3
 
@@ -30,15 +30,10 @@ export default function StockPage() {
   const [modal, setModal] = useState(false)
   const [edit, setEdit] = useState(null)
   const [del, setDel] = useState(null)
-  const [openPlat, setOpenPlat] = useState(null)
-  const platRef = useRef(null)
 
-  /* ──── Fermeture menu inline au clic dehors ──── */
-  useEffect(() => {
-    const h = (e) => { if (platRef.current && !platRef.current.contains(e.target)) setOpenPlat(null) }
-    if (openPlat) document.addEventListener('mousedown', h)
-    return () => document.removeEventListener('mousedown', h)
-  }, [openPlat])
+  /* ──── Édition inline marketplace ──── */
+  const [editingId, setEditingId] = useState(null)
+  const [editVal, setEditVal] = useState('')
 
   const fetch = useCallback(async () => {
     setLoading(true); setError(null)
@@ -65,7 +60,6 @@ export default function StockPage() {
     return r
   }, [items, cat, q])
 
-  /* ──── Totaux sur les lignes filtrées ──── */
   const totals = useMemo(() => ({
     coutTotal: filtered.reduce((s, i) => s + Number(i.cout_total_lot ?? 0), 0),
     totalVente: filtered.reduce((s, i) => s + Number(i.valeur_stock_restant ?? 0), 0),
@@ -83,13 +77,29 @@ export default function StockPage() {
   const editItem = async (fd) => { const { error } = await supabase.from('revente_stock').update(fd).eq('id', edit.id); if (error) throw error; toast.success('Article modifié'); await fetch() }
   const removeItem = async (id) => { const { error } = await supabase.from('revente_stock').delete().eq('id', id); if (error) { toast.error('Erreur'); return }; toast.success('Article supprimé'); setDel(null); await fetch() }
 
-  /* ──── Mise à jour inline plateforme_conseillee ──── */
-  const handlePlateformeUpdate = async (id, valeur) => {
-    const { error } = await supabase.from('revente_stock').update({ plateforme_conseillee: valeur }).eq('id', id)
+  /* ──── Sauvegarde inline marketplace ──── */
+  const savePlateforme = async (id) => {
+    const val = editVal.trim()
+    if (!val) { setEditingId(null); return }
+    const { error } = await supabase.from('revente_stock').update({ plateforme_conseillee: val }).eq('id', id)
     if (error) { toast.error('Erreur'); return }
-    toast.success(`Marketplace: ${valeur}`)
-    setOpenPlat(null)
-    setItems(prev => prev.map(i => i.id === id ? { ...i, plateforme_conseillee: valeur } : i))
+    toast.success(`Marketplace: ${val}`)
+    setItems(prev => prev.map(i => i.id === id ? { ...i, plateforme_conseillee: val } : i))
+    setEditingId(null)
+  }
+
+  const startEdit = (item) => {
+    setEditingId(item.id)
+    setEditVal(item.plateforme_conseillee || '')
+    setTimeout(() => {
+      const el = document.getElementById(`plat-input-${item.id}`)
+      if (el) { el.focus(); el.select() }
+    }, 50)
+  }
+
+  const cancelEdit = () => {
+    setEditingId(null)
+    setEditVal('')
   }
 
   return (
@@ -187,6 +197,7 @@ export default function StockPage() {
                             const coutLot = item.cout_total_lot ?? (Number(item.prix_achat_unitaire) * Number(item.qte_stock))
                             const profit = Number(item.profit_potentiel ?? 0)
                             const isProfitPos = profit >= 0
+                            const isEditing = editingId === item.id
                             return (
                               <motion.tr
                                 key={item.id}
@@ -221,29 +232,32 @@ export default function StockPage() {
                                 </td>
                                 <td className="px-4 py-3 text-right font-mono text-ink-400">{CFMT(item.prix_revente_unitaire)}</td>
                                 <td className="px-4 py-3 text-right font-mono font-bold text-accent">{CFMT(item.valeur_stock_restant)}</td>
-                                {/* Profit */}
                                 <td className={`px-4 py-3 text-right font-mono font-bold ${isProfitPos ? 'text-accent' : 'text-danger'}`}>{CFMT(profit)}</td>
-                                {/* Marketplace editable inline */}
-                                <td className="px-4 py-3 text-center relative">
-                                  <div ref={openPlat === item.id ? platRef : null}>
-                                    <button
-                                      onClick={() => setOpenPlat(openPlat === item.id ? null : item.id)}
-                                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium border border-base-700 bg-base-800 text-ink-400 hover:border-accent/40 hover:text-accent transition-all"
-                                    >
-                                      {item.plateforme_conseillee || '–'}
-                                      <ChevronDown className="w-3 h-3" />
+                                {/* Marketplace — texte + crayon, input avec datalist au clic */}
+                                <td className="px-4 py-3 text-center">
+                                  {isEditing ? (
+                                    <div className="flex items-center justify-center gap-1">
+                                      <input
+                                        id={`plat-input-${item.id}`}
+                                        list={`plat-suggestions`}
+                                        value={editVal}
+                                        onChange={e => setEditVal(e.target.value)}
+                                        onKeyDown={e => { if (e.key === 'Enter') savePlateforme(item.id); if (e.key === 'Escape') cancelEdit() }}
+                                        className="w-36 bg-base-800 border border-accent/50 rounded px-2 py-1 text-xs text-ink-50 font-sans outline-none"
+                                        placeholder="Plateforme…"
+                                      />
+                                      <datalist id="plat-suggestions">
+                                        {SUGGESTIONS_MARCHE.map(s => <option key={s} value={s} />)}
+                                      </datalist>
+                                      <button onClick={() => savePlateforme(item.id)} className="p-0.5 rounded text-accent hover:text-accent/80 transition-colors"><Check className="w-3.5 h-3.5" /></button>
+                                      <button onClick={cancelEdit} className="p-0.5 rounded text-ink-400 hover:text-ink-50 transition-colors"><X className="w-3.5 h-3.5" /></button>
+                                    </div>
+                                  ) : (
+                                    <button onClick={() => startEdit(item)} className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium text-ink-400 hover:text-accent hover:bg-base-800 transition-all group">
+                                      <span>{item.plateforme_conseillee || '–'}</span>
+                                      <Pencil className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
                                     </button>
-                                    {openPlat === item.id && (
-                                      <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 z-50 card-dash shadow-lg py-1 min-w-[140px]" onClick={e => e.stopPropagation()}>
-                                        {PLATEFORMES_MARCHE.map(p => (
-                                          <button key={p} onClick={() => handlePlateformeUpdate(item.id, p)}
-                                            className={`block w-full text-left px-3 py-1.5 text-xs hover:bg-base-800 transition-colors ${
-                                              (item.plateforme_conseillee || '') === p ? 'font-bold text-accent' : 'text-ink-400'
-                                            }`}>{p}</button>
-                                        ))}
-                                      </div>
-                                    )}
-                                  </div>
+                                  )}
                                 </td>
                                 <td className="px-4 py-3 text-center">
                                   <div className="flex items-center justify-center gap-1">
@@ -257,22 +271,16 @@ export default function StockPage() {
                           })}
                         </AnimatePresence>
                       </tbody>
-                      {/* ── Ligne de totaux ── */}
+                      {/* Totaux */}
                       <tfoot>
                         <tr className="border-t-2 border-accent/30 bg-base-900/80">
                           <td className="px-4 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium">Totaux</td>
                           <td className="px-4 py-3" />
-                          <td className="px-4 py-3 text-right font-mono font-bold text-ink-50">
-                            <CountUp end={totals.coutTotal} decimals={2} prefix="€" />
-                          </td>
+                          <td className="px-4 py-3 text-right font-mono font-bold text-ink-50"><CountUp end={totals.coutTotal} decimals={2} prefix="€" /></td>
                           <td className="px-4 py-3" />
                           <td className="px-4 py-3" />
-                          <td className="px-4 py-3 text-right font-mono font-bold text-accent">
-                            <CountUp end={totals.totalVente} decimals={2} prefix="€" />
-                          </td>
-                          <td className={`px-4 py-3 text-right font-mono font-bold ${totals.profit >= 0 ? 'text-accent' : 'text-danger'}`}>
-                            <CountUp end={totals.profit} decimals={2} prefix="€" />
-                          </td>
+                          <td className="px-4 py-3 text-right font-mono font-bold text-accent"><CountUp end={totals.totalVente} decimals={2} prefix="€" /></td>
+                          <td className={`px-4 py-3 text-right font-mono font-bold ${totals.profit >= 0 ? 'text-accent' : 'text-danger'}`}><CountUp end={totals.profit} decimals={2} prefix="€" /></td>
                           <td className="px-4 py-3" />
                           <td className="px-4 py-3" />
                         </tr>
@@ -320,18 +328,9 @@ export default function StockPage() {
                         <span className="text-xs text-ink-400 font-sans font-medium uppercase tracking-wider">Totaux</span>
                       </div>
                       <div className="grid grid-cols-3 gap-2 mt-2 text-xs">
-                        <div>
-                          <span className="text-ink-400">Coût lots</span>
-                          <p className="font-mono font-bold text-ink-50"><CountUp end={totals.coutTotal} decimals={2} prefix="€" /></p>
-                        </div>
-                        <div>
-                          <span className="text-ink-400">Total Vente</span>
-                          <p className="font-mono font-bold text-accent"><CountUp end={totals.totalVente} decimals={2} prefix="€" /></p>
-                        </div>
-                        <div>
-                          <span className="text-ink-400">Profit</span>
-                          <p className={`font-mono font-bold ${totals.profit >= 0 ? 'text-accent' : 'text-danger'}`}><CountUp end={totals.profit} decimals={2} prefix="€" /></p>
-                        </div>
+                        <div><span className="text-ink-400">Coût lots</span><p className="font-mono font-bold text-ink-50"><CountUp end={totals.coutTotal} decimals={2} prefix="€" /></p></div>
+                        <div><span className="text-ink-400">Total Vente</span><p className="font-mono font-bold text-accent"><CountUp end={totals.totalVente} decimals={2} prefix="€" /></p></div>
+                        <div><span className="text-ink-400">Profit</span><p className={`font-mono font-bold ${totals.profit >= 0 ? 'text-accent' : 'text-danger'}`}><CountUp end={totals.profit} decimals={2} prefix="€" /></p></div>
                       </div>
                     </div>
                   </div>

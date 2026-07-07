@@ -5,8 +5,8 @@ import { Upload, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 const CATS = ['Informatique','Mode','Bijoux','Moto','Papeterie/Bureau','Hygiène/Beauté','Stock existant','Autre']
-const PLATEFORMES_MARCHE = ['Vinted','Leboncoin','Facebook Marketplace','TikTok Shop','Temu','Whatnot','Vestiaire Collective','Autre']
-const EMPTY = { produit: '', categorie: 'Autre', prix_achat_unitaire: '', qte_stock: '', prix_revente_unitaire: '', plateforme_conseillee: 'Vinted' }
+const SUGGESTIONS_MARCHE = ['Vinted', 'Leboncoin', 'Leboncoin Pro', 'Vinted Pro', 'Facebook Marketplace', 'TikTok Shop', 'Vestiaire Collective', 'Joli Closet', 'Whatnot']
+const EMPTY = { produit: '', categorie: 'Autre', prix_achat_unitaire: '', qte_stock: '', prix_revente_unitaire: '', plateforme_conseillee: '' }
 const CFMT = (v) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v)
 
 export default function StockModal({ isOpen, onClose, onSave, item }) {
@@ -23,7 +23,7 @@ export default function StockModal({ isOpen, onClose, onSave, item }) {
         prix_achat_unitaire: item.prix_achat_unitaire?.toString() ?? '',
         qte_stock: item.qte_stock?.toString() ?? '',
         prix_revente_unitaire: item.prix_revente_unitaire?.toString() ?? '',
-        plateforme_conseillee: item.plateforme_conseillee || 'Vinted',
+        plateforme_conseillee: item.plateforme_conseillee || '',
       })
       setEp(item.photo_url ?? null)
     } else { setF(EMPTY); setEp(null) }
@@ -65,7 +65,7 @@ export default function StockModal({ isOpen, onClose, onSave, item }) {
         prix_achat_unitaire: parseFloat(f.prix_achat_unitaire),
         qte_stock: parseInt(f.qte_stock, 10),
         prix_revente_unitaire: parseFloat(f.prix_revente_unitaire),
-        plateforme_conseillee: f.plateforme_conseillee,
+        plateforme_conseillee: f.plateforme_conseillee || null,
         photo_url: url,
       })
       onClose()
@@ -149,12 +149,20 @@ export default function StockModal({ isOpen, onClose, onSave, item }) {
                 <label className="block text-xs font-medium text-ink-400 mb-1">Prix revente unitaire (€)</label>
                 <input type="number" step="0.01" min="0" required value={f.prix_revente_unitaire} onChange={chg('prix_revente_unitaire')} className="input-field w-full font-mono" placeholder="0.00" />
               </div>
-              {/* Marketplace */}
+              {/* Marketplace — champ libre avec suggestions */}
               <div>
                 <label className="block text-xs font-medium text-ink-400 mb-1">Marketplace conseillée</label>
-                <select value={f.plateforme_conseillee} onChange={chg('plateforme_conseillee')} className="input-field w-full">
-                  {PLATEFORMES_MARCHE.map(p => <option key={p} value={p}>{p}</option>)}
-                </select>
+                <input
+                  type="text"
+                  list="modal-plat-suggestions"
+                  value={f.plateforme_conseillee}
+                  onChange={chg('plateforme_conseillee')}
+                  className="input-field w-full font-sans"
+                  placeholder="Ex. Vinted, Leboncoin, ou plusieurs…"
+                />
+                <datalist id="modal-plat-suggestions">
+                  {SUGGESTIONS_MARCHE.map(s => <option key={s} value={s} />)}
+                </datalist>
               </div>
 
               <div className="flex justify-end gap-3 pt-2 border-t border-base-700">
