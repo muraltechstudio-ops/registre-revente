@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useRouter } from 'next/router'
 import { supabase } from '../lib/supabaseClient'
 import { exportToCSV } from '../lib/csvExport'
@@ -12,8 +12,8 @@ import {
   Trash2,
   Receipt,
   Package,
-  CalendarDays,
   Building2,
+  ChevronDown,
 } from 'lucide-react'
 
 /* ──── Constantes ──── */
@@ -29,6 +29,24 @@ const PLATEFORMES = [
 
 const PLATEFORME_FILTERS = ['Toutes', ...PLATEFORMES]
 
+const STATUTS = [
+  'À expédier',
+  'Expédié',
+  'Livré',
+  'Litige/Retour',
+  'Annulé',
+]
+
+const STATUT_FILTERS = ['Tous', ...STATUTS]
+
+const STATUT_STYLES = {
+  'À expédier': 'bg-amber-pale text-amber border-amber/20',
+  'Expédié': 'bg-blue-100 text-blue-700 border-blue-200',
+  'Livré': 'bg-sage-pale text-sage border-sage/20',
+  'Litige/Retour': 'bg-terracotta-pale text-terracotta border-terracotta/20',
+  'Annulé': 'bg-gray-100 text-gray-500 border-gray-200 line-through',
+}
+
 const EMPTY_SALE_FORM = {
   stock_id: '',
   produit: '',
@@ -37,6 +55,7 @@ const EMPTY_SALE_FORM = {
   prix_revente_unitaire: '',
   qte_vendue: 1,
   plateforme: 'Vinted',
+  statut: 'À expédier',
   date_vente: '',
   client_nom: '',
   client_prenom: '',
@@ -68,9 +87,25 @@ export default function VentesPage() {
 
   // Filtres tableau
   const [platformFilter, setPlatformFilter] = useState('Toutes')
+  const [statutFilter, setStatutFilter] = useState('Tous')
   const [dateDebut, setDateDebut] = useState('')
   const [dateFin, setDateFin] = useState('')
   const [searchVente, setSearchVente] = useState('')
+
+  // Menu inline de statut
+  const [openStatutId, setOpenStatutId] = useState(null)
+  const statutMenuRef = useRef(null)
+
+  /* ──── Fermeture au clic dehors ──── */
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (statutMenuRef.current && !statutMenuRef.current.contains(e.target)) {
+        setOpenStatutId(null)
+      }
+    }
+    if (openStatutId) document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [openStatutId])
 
   /* ──── Chargement ──── */
   const fetchData = useCallback(async () => {
@@ -116,7 +151,6 @@ export default function VentesPage() {
           prix_achat_unitaire: item.prix_achat_unitaire,
           prix_revente_unitaire: item.prix_revente_unitaire,
         }))
-        // Focus sur la quantité vendue
         setTimeout(() => {
           const qtyInput = document.getElementById('qte_vendue')
           qtyInput?.focus()
@@ -179,6 +213,7 @@ export default function VentesPage() {
           prix_revente_unitaire: Number.parseFloat(form.prix_revente_unitaire),
           qte_vendue: Number.parseInt(form.qte_vendue, 10),
           plateforme: form.plateforme,
+          statut: form.statut,
           client_nom: form.client_nom || null,
           client_prenom: form.client_prenom || null,
           client_adresse: form.client_adresse || null,
@@ -193,6 +228,24 @@ export default function VentesPage() {
       console.error(err)
       toast.error("Erreur lors de l'enregistrement de la vente")
     }
+  }
+
+  /* ──── Mise à jour inline du statut ──── */
+  const handleStatutUpdate = async (id, nouveauStatut) => {
+    const { error } = await supabase
+      .from('revente_ventes')
+      .update({ statut: nouveauStatut })
+      .eq('id', id)
+    if (error) {
+      toast.error('Erreur lors de la mise à jour du statut')
+      return
+    }
+    toast.success(`Statut mis à jour : ${nouveauStatut}`)
+    setOpenStatutId(null)
+    // Mise à jour locale sans rechargement complet
+    setVentes((prev) =>
+      prev.map((v) => (v.id === id ? { ...v, statut: nouveauStatut } : v)),
+    )
   }
 
   /* ──── Supprimer une vente ──── */
@@ -211,6 +264,7 @@ export default function VentesPage() {
     () =>
       ventes.filter((v) => {
         if (platformFilter !== 'Toutes' && v.plateforme !== platformFilter) return false
+        if (statutFilter !== 'Tous' && v.statut !== statutFilter) return false
         if (dateDebut && v.date_vente < dateDebut) return false
         if (dateFin && v.date_vente > dateFin) return false
         if (searchVente.trim()) {
@@ -219,7 +273,7 @@ export default function VentesPage() {
         }
         return true
       }),
-    [ventes, platformFilter, dateDebut, dateFin, searchVente],
+    [ventes, platformFilter, statutFilter, dateDebut, dateFin, searchVente],
   )
 
   const totalBenefit = useMemo(
@@ -240,6 +294,7 @@ export default function VentesPage() {
       { key: 'produit', label: 'Produit' },
       { key: 'categorie', label: 'Catégorie' },
       { key: 'plateforme', label: 'Plateforme' },
+      { key: 'statut', label: 'Statut' },
       { key: 'qte_vendue', label: 'Qté vendue' },
       {
         key: 'prix_achat_unitaire',
@@ -307,9 +362,8 @@ export default function VentesPage() {
           </div>
 
           <form onSubmit={handleSubmit}>
-            {/* 2 colonnes desktop */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-6 gap-y-3">
-              {/* COLONNE GAUCHE : Infos produit */}
+              {/* COLONNE GAUCHE : Infos produit & vente */}
               <div className="space-y-3">
                 <h3 className="text-xs font-semibold text-ink/40 uppercase tracking-wider flex items-center gap-1.5">
                   <Package className="w-3.5 h-3.5" />
@@ -395,16 +449,32 @@ export default function VentesPage() {
                   </div>
                 </div>
 
-                {/* Date */}
-                <div>
-                  <label className="block text-sm font-medium text-ink/70 mb-1">Date</label>
-                  <input
-                    type="date"
-                    required
-                    value={form.date_vente}
-                    onChange={(e) => setForm((f) => ({ ...f, date_vente: e.target.value }))}
-                    className="w-full border border-border bg-white rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-sage/30 focus:border-sage outline-none transition-colors"
-                  />
+                {/* Statut + Date */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-ink/70 mb-1">Statut</label>
+                    <select
+                      value={form.statut}
+                      onChange={(e) => setForm((f) => ({ ...f, statut: e.target.value }))}
+                      className="w-full border border-border bg-white rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-sage/30 focus:border-sage outline-none transition-colors"
+                    >
+                      {STATUTS.map((s) => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-ink/70 mb-1">Date</label>
+                    <input
+                      type="date"
+                      required
+                      value={form.date_vente}
+                      onChange={(e) => setForm((f) => ({ ...f, date_vente: e.target.value }))}
+                      className="w-full border border-border bg-white rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-sage/30 focus:border-sage outline-none transition-colors"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -472,6 +542,7 @@ export default function VentesPage() {
           </div>
 
           <div className="flex flex-wrap gap-3">
+            {/* Filtre plateforme */}
             <div>
               <label className="block text-xs font-medium text-ink/50 mb-1">Plateforme</label>
               <select
@@ -486,6 +557,22 @@ export default function VentesPage() {
                 ))}
               </select>
             </div>
+            {/* Filtre statut */}
+            <div>
+              <label className="block text-xs font-medium text-ink/50 mb-1">Statut</label>
+              <select
+                value={statutFilter}
+                onChange={(e) => setStatutFilter(e.target.value)}
+                className="border border-border bg-white rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-sage/30 focus:border-sage outline-none transition-colors"
+              >
+                {STATUT_FILTERS.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {/* Filtres période */}
             <div>
               <label className="block text-xs font-medium text-ink/50 mb-1">Du</label>
               <input
@@ -535,6 +622,7 @@ export default function VentesPage() {
                     <th className="px-4 py-3 text-left font-medium text-ink/50">Date</th>
                     <th className="px-4 py-3 text-left font-medium text-ink/50">Produit</th>
                     <th className="px-4 py-3 text-left font-medium text-ink/50">Plateforme</th>
+                    <th className="px-4 py-3 text-center font-medium text-ink/50">Statut</th>
                     <th className="px-4 py-3 text-right font-medium text-ink/50">Qté</th>
                     <th className="px-4 py-3 text-right font-medium text-ink/50">Achat</th>
                     <th className="px-4 py-3 text-right font-medium text-ink/50">Vente</th>
@@ -550,6 +638,7 @@ export default function VentesPage() {
                     const benU = pv - pu
                     const benT = benU * v.qte_vendue
                     const isBenef = benU >= 0
+                    const statut = v.statut || 'À expédier'
 
                     return (
                       <tr
@@ -561,6 +650,35 @@ export default function VentesPage() {
                         <td className="px-4 py-3 font-mono text-xs text-ink/70 whitespace-nowrap">{v.date_vente}</td>
                         <td className="px-4 py-3 font-medium text-ink">{v.produit}</td>
                         <td className="px-4 py-3 text-ink/60">{v.plateforme}</td>
+                        {/* Statut avec éditeur inline */}
+                        <td className="px-4 py-3 text-center relative">
+                          <div className="relative inline-block" ref={openStatutId === v.id ? statutMenuRef : null}>
+                            <button
+                              onClick={() => setOpenStatutId(openStatutId === v.id ? null : v.id)}
+                              className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium border cursor-pointer transition-colors ${
+                                STATUT_STYLES[statut] || 'bg-gray-100 text-gray-600 border-gray-200'
+                              }`}
+                            >
+                              {statut}
+                              <ChevronDown className="w-3 h-3" />
+                            </button>
+                            {openStatutId === v.id && (
+                              <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 z-50 bg-white border border-border rounded-md shadow-lg py-1 min-w-[130px]">
+                                {STATUTS.map((s) => (
+                                  <button
+                                    key={s}
+                                    onClick={() => handleStatutUpdate(v.id, s)}
+                                    className={`block w-full text-left px-3 py-1.5 text-xs hover:bg-ink/5 transition-colors ${
+                                      s === statut ? 'font-semibold text-ink' : 'text-ink/70'
+                                    }`}
+                                  >
+                                    {s}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </td>
                         <td className="px-4 py-3 text-right font-mono text-ink/70">{v.qte_vendue}</td>
                         <td className="px-4 py-3 text-right font-mono text-ink/70">{formatCurrency(pu)}</td>
                         <td className="px-4 py-3 text-right font-mono text-ink/70">{formatCurrency(pv)}</td>
@@ -593,7 +711,7 @@ export default function VentesPage() {
                 </tbody>
                 <tfoot className="bg-ink/[0.02] border-t-2 border-ink/20">
                   <tr className="font-semibold text-sm">
-                    <td colSpan={7} className="px-4 py-3 text-right text-ink/70">
+                    <td colSpan={8} className="px-4 py-3 text-right text-ink/70">
                       Total des lignes filtrées
                     </td>
                     <td
@@ -617,6 +735,7 @@ export default function VentesPage() {
                 const benU = pv - pu
                 const benT = benU * v.qte_vendue
                 const isBenef = benU >= 0
+                const statut = v.statut || 'À expédier'
 
                 return (
                   <div key={v.id} className="bg-white rounded-lg border border-border p-4">
@@ -632,8 +751,18 @@ export default function VentesPage() {
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-3 text-xs">
-                      <span className="text-ink/50">Plateforme : <strong className="text-ink">{v.plateforme}</strong></span>
+
+                    {/* Badge statut + plateforme */}
+                    <div className="flex items-center gap-2 mt-2">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border ${
+                        STATUT_STYLES[statut] || 'bg-gray-100 text-gray-600 border-gray-200'
+                      }`}>
+                        {statut}
+                      </span>
+                      <span className="text-xs text-ink/50">{v.plateforme}</span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-2 text-xs">
                       <span className="text-ink/50">Qté : <strong className="font-mono text-ink">{v.qte_vendue}</strong></span>
                       <span className="text-ink/50">Achat : <strong className="font-mono text-ink/70">{formatCurrency(pu)}</strong></span>
                       <span className="text-ink/50">Vente : <strong className="font-mono text-ink/70">{formatCurrency(pv)}</strong></span>
