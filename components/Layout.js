@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/router'
-import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '../lib/supabaseClient'
 import {
   LayoutDashboard,
@@ -48,49 +47,36 @@ export default function Layout({ children }) {
   const isActive = (href) => router.pathname === href
   const today = new Date()
 
-  const sidebarVariants = {
-    open: { x: 0, transition: { type: 'spring', stiffness: 300, damping: 30 } },
-    closed: { x: '-100%', transition: { type: 'spring', stiffness: 300, damping: 30 } },
-  }
-
   return (
     <div className="min-h-screen flex flex-col md:flex-row relative">
       {/* Mobile header */}
       <div className="md:hidden fixed top-0 left-0 right-0 z-50 flex items-center justify-between bg-white/80 backdrop-blur-xl border-b border-border/50 px-4 h-14">
         <button
-          onClick={() => setMenuOpen(true)}
+          onClick={() => setMenuOpen(!menuOpen)}
           className="w-9 h-9 flex items-center justify-center rounded-lg text-ink hover:bg-ink/5 transition-colors"
           aria-label="Menu"
         >
           <Menu className="w-5 h-5" />
         </button>
-        <span className="font-serif text-lg font-bold gradient-text">
-          Registre
-        </span>
+        <span className="font-serif text-lg font-bold gradient-text">Registre</span>
         <div className="w-9" />
       </div>
 
       {/* Mobile overlay */}
-      <AnimatePresence>
-        {menuOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40 md:hidden"
-            onClick={() => setMenuOpen(false)}
-          />
-        )}
-      </AnimatePresence>
+      {menuOpen && (
+        <div
+          className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40 md:hidden"
+          onClick={() => setMenuOpen(false)}
+        />
+      )}
 
-      {/* Sidebar */}
-      <motion.aside
-        initial={false}
-        animate={menuOpen ? 'open' : 'closed'}
-        variants={sidebarVariants}
-        className="fixed md:sticky top-0 left-0 z-50 h-dvh w-64 bg-white/90 backdrop-blur-2xl border-r border-border/50 flex flex-col md:translate-x-0 shadow-lg md:shadow-none"
+      {/* Sidebar — toujours visible sur desktop, animé sur mobile */}
+      <aside
+        className={`fixed md:sticky top-0 left-0 z-50 h-dvh w-64 bg-white/90 backdrop-blur-2xl border-r border-border/50 flex flex-col shadow-lg md:shadow-none transition-transform duration-300 ease-in-out ${
+          menuOpen ? 'translate-x-0' : '-translate-x-full'
+        } md:translate-x-0`}
       >
-        {/* Close mobile */}
+        {/* Close button mobile */}
         <button
           onClick={() => setMenuOpen(false)}
           className="md:hidden absolute top-3 right-3 w-8 h-8 flex items-center justify-center rounded-lg text-ink/40 hover:bg-ink/5 hover:text-ink transition-colors"
@@ -99,7 +85,7 @@ export default function Layout({ children }) {
           <X className="w-4 h-4" />
         </button>
 
-        {/* Logo */}
+        {/* Logo + date */}
         <div className="px-5 pt-7 pb-5 border-b border-border/40">
           <Link href="/dashboard" className="font-serif text-xl font-bold tracking-tight">
             <span className="gradient-text">Registre</span>
@@ -128,9 +114,7 @@ export default function Layout({ children }) {
                   !active && 'group-hover:scale-110'
                 }`} />
                 {item.label}
-                {active && (
-                  <ChevronRight className="w-3.5 h-3.5 ml-auto opacity-60" />
-                )}
+                {active && <ChevronRight className="w-3.5 h-3.5 ml-auto opacity-60" />}
               </Link>
             )
           })}
@@ -149,7 +133,7 @@ export default function Layout({ children }) {
             Déconnexion
           </button>
         </div>
-      </motion.aside>
+      </aside>
 
       {/* Main content */}
       <main className="flex-1 min-h-screen pt-14 md:pt-0">
