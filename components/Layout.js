@@ -42,6 +42,7 @@ export default function Layout({ children }) {
         <div className="w-8" />
       </div>
 
+      {/* Mobile overlay */}
       <AnimatePresence>
         {open && (
           <motion.div
@@ -52,13 +53,11 @@ export default function Layout({ children }) {
         )}
       </AnimatePresence>
 
-      {/* Sidebar */}
-      <motion.aside
-        initial={false}
-        animate={open ? 'open' : 'closed'}
-        variants={{ open: { x: 0 }, closed: { x: '-100%' } }}
-        transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-        className="fixed md:sticky top-0 left-0 z-50 h-dvh w-60 bg-base-900 border-r border-base-700 flex flex-col md:translate-x-0"
+      {/* Sidebar — CSS transition (pas framer-motion) pour éviter le bug d'inline style */}
+      <aside
+        className={`fixed md:sticky top-0 left-0 z-50 h-dvh w-60 bg-base-900 border-r border-base-700 flex flex-col transition-transform duration-200 ease-in-out ${
+          open ? 'translate-x-0' : '-translate-x-full'
+        } md:translate-x-0`}
       >
         <div className="md:hidden absolute top-2 right-2">
           <button onClick={() => setOpen(false)} className="p-1.5 rounded-lg text-ink-400 hover:text-ink-50"><X className="w-4 h-4" /></button>
@@ -101,7 +100,7 @@ export default function Layout({ children }) {
             Déconnexion
           </button>
         </div>
-      </motion.aside>
+      </aside>
 
       {/* Content */}
       <main className="flex-1 min-h-screen pt-14 md:pt-0">
