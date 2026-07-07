@@ -27,14 +27,19 @@ export default function StockPage() {
     setError(null)
     try {
       // Try summary view first, fallback to direct stock query
-      let data, err
+      let data
       const r = await supabase.from('revente_stock_summary').select('*').order('produit')
       if (r.error) {
-        // View might be broken — try direct query
         console.warn('Summary view error:', r.error.message)
         const r2 = await supabase.from('revente_stock').select('*').order('produit')
         if (r2.error) throw new Error(r2.error.message)
-        data = (r2.data ?? []).map(i => ({ ...i, qte_vendue: 0, qte_restante: i.qte_stock, valeur_stock_restant: i.qte_stock * Number(i.prix_revente_unitaire) }))
+        data = (r2.data ?? []).map(i => ({
+          ...i,
+          qte_vendue: 0,
+          qte_restante: i.qte_stock,
+          valeur_stock_restant: i.qte_stock * Number(i.prix_revente_unitaire),
+          cout_total_lot: i.cout_total_lot ?? (i.qte_stock * Number(i.prix_achat_unitaire)),
+        }))
       } else {
         data = r.data ?? []
       }
@@ -46,8 +51,12 @@ export default function StockPage() {
         if (!p.error) photos = p.data ?? []
       } catch {}
 
-      // Attach photos
-      setItems(data.map(i => ({ ...i, photo_url: photos.find(p => p.id === i.id)?.photo_url ?? null })))
+      // Attach photos + ensure cout_total_lot fallback
+      setItems(data.map(i => ({
+        ...i,
+        photo_url: photos.find(p => p.id === i.id)?.photo_url ?? null,
+        cout_total_lot: i.cout_total_lot ?? (Number(i.prix_achat_unitaire) * Number(i.qte_stock)),
+      })))
     } catch (err) {
       console.error(err)
       setError(err.message)
@@ -68,6 +77,7 @@ export default function StockPage() {
     val: items.reduce((s, i) => s + Number(i.valeur_stock_restant ?? 0), 0),
     qty: items.reduce((s, i) => s + Number(i.qte_stock ?? 0), 0),
     rest: items.reduce((s, i) => s + Number(i.qte_restante ?? 0), 0),
+    coutTotal: items.reduce((s, i) => s + Number(i.cout_total_lot ?? 0), 0),
   }), [items])
 
   const addItem = async (fd) => {
@@ -108,7 +118,7 @@ export default function StockPage() {
         ) : (
           <>
             {/* KPI mini */}
-            <div className="grid grid-cols-3 gap-3 mb-6">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
               <div className="card-hover p-4">
                 <p className="text-xs text-muted font-serif italic">Valeur stock</p>
                 <p className="font-mono text-lg font-bold text-ink mt-1">{CFMT(metrics.val)}</p>
@@ -120,6 +130,10 @@ export default function StockPage() {
               <div className="card-hover p-4">
                 <p className="text-xs text-muted font-serif italic">Restant</p>
                 <p className="font-mono text-lg font-bold text-ink mt-1">{metrics.rest}</p>
+              </div>
+              <div className="card-hover p-4">
+                <p className="text-xs text-muted font-serif italic">Coût total lots</p>
+                <p className="font-mono text-lg font-bold text-ink mt-1">{CFMT(metrics.coutTotal)}</p>
               </div>
             </div>
 
@@ -167,7 +181,8 @@ export default function StockPage() {
                     <thead>
                       <tr className="border-b border-border/50 bg-ink/[0.02]">
                         <th className="text-left px-4 py-3 font-serif font-bold text-xs text-muted tracking-wider">Produit</th>
-                        <th className="text-right px-4 py-3 font-serif font-bold text-xs text-muted tracking-wider">Achat</th>
+                        <th className="text-right px-4 py-3 font-serif font-bold text-xs text-muted tracking-wider">Coût unitaire</th>
+                        <th className="text-right px-4 py-3 font-serif font-bold text-xs text-muted tracking-wider">Coût total lot</th>
                         <th className="text-center px-4 py-3 font-serif font-bold text-xs text-muted tracking-wider">Stock</th>
                         <th className="text-right px-4 py-3 font-serif font-bold text-xs text-muted tracking-wider">Vente</th>
                         <th className="text-right px-4 py-3 font-serif font-bold text-xs text-muted tracking-wider">Valeur</th>
@@ -177,6 +192,7 @@ export default function StockPage() {
                     <tbody className="divide-y divide-border/30">
                       {filtered.map((item, idx) => {
                         const isLow = item.qte_restante <= LOW
+                        const coutLot = item.cout_total_lot ?? (Number(item.prix_achat_unitaire) * Number(item.qte_stock))
                         return (
                           <tr key={item.id} className={`${idx % 2 === 0 ? 'bg-card' : 'bg-ink/[0.015]'} hover:bg-gold/5 transition-colors`}>
                             <td className="px-4 py-3">
@@ -191,6 +207,7 @@ export default function StockPage() {
                               </div>
                             </td>
                             <td className="px-4 py-3 text-right font-mono text-muted">{CFMT(item.prix_achat_unitaire)}</td>
+                            <td className="px-4 py-3 text-right font-mono font-semibold text-ink">{CFMT(coutLot)}</td>
                             <td className="px-4 py-3 text-center">
                               <span className={`font-mono font-semibold ${isLow ? 'text-rust' : 'text-forest'}`}>{item.qte_restante}</span>
                               <span className="font-mono text-muted/40 text-[11px]"> /{item.qte_stock}</span>
@@ -215,6 +232,7 @@ export default function StockPage() {
                 <div className="sm:hidden space-y-3">
                   {filtered.map(item => {
                     const isLow = item.qte_restante <= LOW
+                    const coutLot = item.cout_total_lot ?? (Number(item.prix_achat_unitaire) * Number(item.qte_stock))
                     return (
                       <div key={item.id} className="card p-4">
                         <div className="flex items-start justify-between gap-2">
@@ -225,8 +243,10 @@ export default function StockPage() {
                         <div className="grid grid-cols-2 gap-2 mt-3 text-xs">
                           <span>Stock: <strong className="font-mono">{item.qte_stock}</strong></span>
                           <span>Restant: <strong className={`font-mono ${isLow ? 'text-rust' : 'text-forest'}`}>{item.qte_restante}</strong></span>
-                          <span>Achat: <strong className="font-mono">{CFMT(item.prix_achat_unitaire)}</strong></span>
+                          <span>Coût unitaire: <strong className="font-mono">{CFMT(item.prix_achat_unitaire)}</strong></span>
+                          <span>Coût lot: <strong className="font-mono">{CFMT(coutLot)}</strong></span>
                           <span>Valeur: <strong className="font-mono text-forest">{CFMT(item.valeur_stock_restant)}</strong></span>
+                          <span>Vente: <strong className="font-mono">{CFMT(item.prix_revente_unitaire)}</strong></span>
                         </div>
                         <div className="flex gap-2 mt-3 pt-3 border-t border-border/30">
                           <button onClick={() => router.push(`/ventes?produit=${item.id}`)} className="flex-1 bg-forest text-white text-xs font-medium rounded-lg py-2 hover:bg-forestlight transition-all">Vendre</button>
@@ -267,8 +287,8 @@ export default function StockPage() {
 function Skel() {
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-3 gap-3">
-        {[1,2,3].map(i => <div key={i} className="card p-4"><div className="h-4 w-20 bg-ink/5 rounded animate-pulse mb-2" /><div className="h-6 w-24 bg-ink/5 rounded animate-pulse" /></div>)}
+      <div className="grid grid-cols-4 gap-3">
+        {[1,2,3,4].map(i => <div key={i} className="card p-4"><div className="h-4 w-20 bg-ink/5 rounded animate-pulse mb-2" /><div className="h-6 w-24 bg-ink/5 rounded animate-pulse" /></div>)}
       </div>
       <div className="card p-4 space-y-3">
         {[1,2,3,4].map(i => <div key={i} className="h-10 bg-ink/5 rounded animate-pulse" />)}

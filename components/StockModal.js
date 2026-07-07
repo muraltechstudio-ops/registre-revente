@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { Upload, Package, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 const CATS = ['Informatique','Mode','Bijoux','Moto','Papeterie/Bureau','Hygiène/Beauté','Stock existant','Autre']
 const EMPTY = { produit: '', categorie: 'Autre', prix_achat_unitaire: '', qte_stock: '', prix_revente_unitaire: '' }
+const CFMT = (v) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v)
 
 export default function StockModal({ isOpen, onClose, onSave, item }) {
   const [f, setF] = useState(EMPTY)
@@ -22,6 +23,14 @@ export default function StockModal({ isOpen, onClose, onSave, item }) {
   }, [item, isOpen])
 
   const chg = (field) => (e) => setF(p => ({ ...p, [field]: e.target.value }))
+
+  // Calcul en temps réel du coût total par lot (côté client, prévisualisation)
+  const coutTotalLot = useMemo(() => {
+    const pu = Number.parseFloat(f.prix_achat_unitaire)
+    const qte = Number.parseInt(f.qte_stock, 10)
+    if (isNaN(pu) || isNaN(qte) || qte === 0) return null
+    return pu * qte
+  }, [f.prix_achat_unitaire, f.qte_stock])
 
   const handlePhoto = (e) => {
     const file = e.target.files?.[0]
@@ -87,13 +96,24 @@ export default function StockModal({ isOpen, onClose, onSave, item }) {
             <select value={f.categorie} onChange={chg('categorie')} className="input-field w-full">{CATS.map(c => <option key={c} value={c}>{c}</option>)}</select>
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <div><label className="block text-sm font-medium text-muted mb-1">Achat (€)</label>
-              <input type="number" step="0.01" min="0" required value={f.prix_achat_unitaire} onChange={chg('prix_achat_unitaire')} className="input-field w-full font-mono" placeholder="0.00" /></div>
-            <div><label className="block text-sm font-medium text-muted mb-1">Qté stock</label>
-              <input type="number" min="0" required value={f.qte_stock} onChange={chg('qte_stock')} className="input-field w-full font-mono" placeholder="0" /></div>
+            <div>
+              <label className="block text-sm font-medium text-muted mb-1">Coût unitaire (€)</label>
+              <input type="number" step="0.01" min="0" required value={f.prix_achat_unitaire} onChange={chg('prix_achat_unitaire')} className="input-field w-full font-mono" placeholder="0.00" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-muted mb-1">Qté en stock</label>
+              <input type="number" min="0" required value={f.qte_stock} onChange={chg('qte_stock')} className="input-field w-full font-mono" placeholder="0" />
+            </div>
           </div>
+          {/* Aperçu en temps réel du coût total par lot */}
+          {coutTotalLot !== null && (
+            <div className="bg-navy/5 border border-gold/20 rounded-lg px-4 py-3 flex items-center justify-between">
+              <span className="text-sm font-serif text-muted italic">Coût total par lot <span className="text-xs text-muted/50">(calculé)</span></span>
+              <span className="font-mono font-bold text-gold text-base">{CFMT(coutTotalLot)}</span>
+            </div>
+          )}
           <div>
-            <label className="block text-sm font-medium text-muted mb-1">Prix revente (€)</label>
+            <label className="block text-sm font-medium text-muted mb-1">Prix revente unitaire (€)</label>
             <input type="number" step="0.01" min="0" required value={f.prix_revente_unitaire} onChange={chg('prix_revente_unitaire')} className="input-field w-full font-mono" placeholder="0.00" />
           </div>
 
