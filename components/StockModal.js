@@ -8,7 +8,7 @@ const CATS = ['Informatique','Mode','Bijoux','Moto','Papeterie/Bureau','Hygiène
 const SUGGESTIONS_MARCHE = ['Vinted', 'Leboncoin', 'Leboncoin Pro', 'Vinted Pro', 'Facebook Marketplace', 'TikTok Shop', 'Vestiaire Collective', 'Joli Closet', 'Whatnot']
 const EMPTY = {
   produit: '', categorie: 'Autre', prix_achat_unitaire: '', qte_stock: '', prix_revente_unitaire: '',
-  plateforme_conseillee: '', date_reception: '', verifie: false,
+  plateforme_conseillee: '', date_reception: '',
 }
 const CFMT = (v) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v)
 const todayStr = () => new Date().toISOString().split('T')[0]
@@ -29,7 +29,6 @@ export default function StockModal({ isOpen, onClose, onSave, item }) {
         prix_revente_unitaire: item.prix_revente_unitaire?.toString() ?? '',
         plateforme_conseillee: item.plateforme_conseillee || '',
         date_reception: item.date_reception || '',
-        verifie: item.verifie ?? false,
       })
       setEp(item.photo_url ?? null)
     } else {
@@ -80,7 +79,6 @@ export default function StockModal({ isOpen, onClose, onSave, item }) {
         plateforme_conseillee: f.plateforme_conseillee || null,
         photo_url: url,
         date_reception: f.date_reception || null,
-        verifie: f.verifie,
       })
       onClose()
     } catch (err) { toast.error("Erreur") }
@@ -163,18 +161,10 @@ export default function StockModal({ isOpen, onClose, onSave, item }) {
                 </datalist>
               </div>
 
-              {/* Date réception + Vérifié */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-ink-400 mb-1">Date de réception</label>
-                  <input type="date" value={f.date_reception} onChange={chg('date_reception')} className="input-field w-full" />
-                </div>
-                <div className="flex items-end pb-2">
-                  <label className="flex items-center gap-2.5 cursor-pointer">
-                    <input type="checkbox" checked={f.verifie} onChange={chg('verifie')} className="w-4 h-4 rounded border-base-700 bg-base-800 text-accent focus:ring-accent/20" />
-                    <span className="text-xs font-medium text-ink-400">Vérifié</span>
-                  </label>
-                </div>
+              {/* Date réception */}
+              <div>
+                <label className="block text-xs font-medium text-ink-400 mb-1">Date de réception</label>
+                <input type="date" value={f.date_reception} onChange={chg('date_reception')} className="input-field w-full" />
               </div>
 
               <div className="flex justify-end gap-3 pt-2 border-t border-base-700">

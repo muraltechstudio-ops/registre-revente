@@ -8,7 +8,7 @@ import StockModal from '../components/StockModal'
 import CountUp from '../components/CountUp'
 import MagneticButton from '../components/MagneticButton'
 import toast from 'react-hot-toast'
-import { Package, Plus, Search, ShoppingCart, Pencil, Trash2, AlertTriangle, Box, TrendingUp, Check, X, CheckCircle2, Circle, CalendarDays } from 'lucide-react'
+import { Package, Plus, Search, ShoppingCart, Pencil, Trash2, AlertTriangle, Box, TrendingUp, Check, X, CalendarDays } from 'lucide-react'
 
 const CATS = ['Informatique','Mode','Bijoux','Moto','Papeterie/Bureau','Hygiène/Beauté','Stock existant','Autre']
 const SUGGESTIONS_MARCHE = ['Vinted', 'Leboncoin', 'Leboncoin Pro', 'Vinted Pro', 'Facebook Marketplace', 'TikTok Shop', 'Vestiaire Collective', 'Joli Closet', 'Whatnot']
@@ -21,8 +21,6 @@ const fmtDate = (d) => {
   const [y, m, day] = d.split('-')
   return `${day}/${m}/${y}`
 }
-
-const todayStr = () => new Date().toISOString().split('T')[0]
 
 /* ──── Skeleton shimmer ──── */
 function Skeleton({ className }) {
@@ -50,7 +48,7 @@ export default function StockPage() {
   const [error, setError] = useState(null)
   const [q, setQ] = useState('')
   const [cat, setCat] = useState(null)
-  const [showUnverified, setShowUnverified] = useState(false)
+  const [showEcart, setShowEcart] = useState(false)
   const [modal, setModal] = useState(false)
   const [edit, setEdit] = useState(null)
   const [del, setDel] = useState(null)
@@ -62,6 +60,10 @@ export default function StockPage() {
   /* ──── Édition inline date réception ──── */
   const [dateEditingId, setDateEditingId] = useState(null)
   const [dateEditVal, setDateEditVal] = useState('')
+
+  /* ──── Édition inline total_recu ──── */
+  const [recuEditingId, setRecuEditingId] = useState(null)
+  const [recuEditVal, setRecuEditVal] = useState('')
 
   const fetch = useCallback(async () => {
     setLoading(true); setError(null)
@@ -84,10 +86,10 @@ export default function StockPage() {
   const filtered = useMemo(() => {
     let r = items
     if (cat) r = r.filter(i => i.categorie === cat)
-    if (showUnverified) r = r.filter(i => !i.verifie)
+    if (showEcart) r = r.filter(i => i.ecart_reception !== null && i.ecart_reception !== undefined && Number(i.ecart_reception) !== 0)
     if (q.trim()) { const s = q.toLowerCase(); r = r.filter(i => i.produit.toLowerCase().includes(s)) }
     return r
-  }, [items, cat, q, showUnverified])
+  }, [items, cat, q, showEcart])
 
   const totals = useMemo(() => ({
     coutTotal: filtered.reduce((s, i) => s + Number(i.cout_total_lot ?? 0), 0),
@@ -127,14 +129,6 @@ export default function StockPage() {
 
   const cancelEdit = () => { setEditingId(null); setEditVal('') }
 
-  /* ──── Toggle vérifié ──── */
-  const toggleVerifie = async (id, current) => {
-    const next = !current
-    const { error } = await supabase.from('revente_stock').update({ verifie: next }).eq('id', id)
-    if (error) { toast.error('Erreur'); return }
-    setItems(prev => prev.map(i => i.id === id ? { ...i, verifie: next } : i))
-  }
-
   /* ──── Sauvegarde inline date réception ──── */
   const saveDate = async (id) => {
     const val = dateEditVal || null
@@ -155,7 +149,34 @@ export default function StockPage() {
 
   const cancelDateEdit = () => { setDateEditingId(null); setDateEditVal('') }
 
-  const unverifiedCount = useMemo(() => items.filter(i => !i.verifie).length, [items])
+  /* ──── Sauvegarde inline total_recu ──── */
+  const saveTotalRecu = async (id) => {
+    const raw = recuEditVal.trim()
+    const val = raw === '' || raw === '-' ? null : parseInt(raw, 10)
+    if (isNaN(val) && raw !== '' && raw !== '-') {
+      toast.error('Veuillez entrer un nombre valide')
+      return
+    }
+    const { error } = await supabase.from('revente_stock').update({ total_recu: val }).eq('id', id)
+    if (error) { toast.error("Erreur lors de l'enregistrement"); return }
+    toast.success(val !== null ? `Total reçu: ${val}` : 'Total reçu effacé')
+    setRecuEditingId(null)
+    // Mise à jour locale : on met à jour total_recu, la vue recalculera ecart_reception au prochain fetch
+    setItems(prev => prev.map(i => i.id === id ? { ...i, total_recu: val, ecart_reception: val !== null ? val - Number(i.qte_stock) : null } : i))
+  }
+
+  const startRecuEdit = (item) => {
+    setRecuEditingId(item.id)
+    setRecuEditVal(item.total_recu !== null && item.total_recu !== undefined ? String(item.total_recu) : '')
+    setTimeout(() => {
+      const el = document.getElementById(`recu-input-${item.id}`)
+      if (el) { el.focus(); el.select() }
+    }, 50)
+  }
+
+  const cancelRecuEdit = () => { setRecuEditingId(null); setRecuEditVal('') }
+
+  const ecartCount = useMemo(() => items.filter(i => i.ecart_reception !== null && i.ecart_reception !== undefined && Number(i.ecart_reception) !== 0).length, [items])
 
   return (
     <AuthGuard>
@@ -208,7 +229,7 @@ export default function StockPage() {
                 </MagneticButton>
               </div>
 
-              {/* Chips */}
+              {/* Chips + filtres */}
               <div className="flex flex-wrap gap-2 mb-5">
                 <button onClick={() => setCat(null)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${!cat ? 'bg-accent text-base-950 border-accent' : 'bg-base-800 text-ink-400 border-base-700 hover:border-accent/40'}`}>Tout</button>
@@ -216,10 +237,10 @@ export default function StockPage() {
                   <button key={c} onClick={() => setCat(cat === c ? null : c)}
                     className={`px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-all ${cat === c ? 'bg-accent text-base-950 border-accent' : 'bg-base-800 text-ink-400 border-base-700 hover:border-accent/40'}`}>{c}</button>
                 ))}
-                {/* Filtre À vérifier */}
-                <button onClick={() => setShowUnverified(!showUnverified)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${showUnverified ? 'bg-danger text-base-950 border-danger' : 'bg-base-800 text-ink-400 border-base-700 hover:border-danger/40 hover:text-danger'}`}>
-                  À vérifier {unverifiedCount > 0 && <span className="ml-1 font-mono">({unverifiedCount})</span>}
+                {/* Filtre Écarts détectés */}
+                <button onClick={() => setShowEcart(!showEcart)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${showEcart ? 'bg-danger text-base-950 border-danger' : 'bg-base-800 text-ink-400 border-base-700 hover:border-danger/40 hover:text-danger'}`}>
+                  Écarts détectés {ecartCount > 0 && <span className="ml-1 font-mono">({ecartCount})</span>}
                 </button>
               </div>
 
@@ -228,29 +249,29 @@ export default function StockPage() {
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="card-dash p-12 text-center">
                   <Box className="w-10 h-10 text-ink-400/20 mx-auto mb-3" />
                   <p className="text-base font-medium text-ink-400/60">
-                    {showUnverified ? 'Tout est vérifié ! ✓' : q || cat ? 'Aucun résultat' : 'Le stock est vide'}
+                    {showEcart ? 'Aucun écart détecté ! ✓' : q || cat ? 'Aucun résultat' : 'Le stock est vide'}
                   </p>
-                  {!q && !cat && !showUnverified && <button onClick={() => { setEdit(null); setModal(true) }} className="btn-primary mt-5 inline-flex items-center gap-2"><Plus className="w-4 h-4" /> Premier article</button>}
+                  {!q && !cat && !showEcart && <button onClick={() => { setEdit(null); setModal(true) }} className="btn-primary mt-5 inline-flex items-center gap-2"><Plus className="w-4 h-4" /> Premier article</button>}
                 </motion.div>
               ) : (
                 <>
-                  {/* Desktop table */}
-                  <div className="hidden sm:block card-dash overflow-hidden">
-                    <table className="w-full text-sm">
+                  {/* Desktop table — wrapper avec scroll horizontal */}
+                  <div className="hidden sm:block overflow-x-auto card-dash">
+                    <table className="min-w-[1180px] w-full text-sm">
                       <thead>
                         <tr className="border-b border-base-700 bg-base-900/50">
-                          <th className="text-left px-3 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium">Produit</th>
-                          <th className="text-center px-3 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium">Vérifié</th>
-                          <th className="text-center px-3 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium">Réception</th>
-                          <th className="text-center px-3 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium">En stock</th>
-                          <th className="text-right px-3 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium">Coût unitaire</th>
-                          <th className="text-right px-3 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium">Coût total lot</th>
-                          <th className="text-center px-3 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium">Stock</th>
-                          <th className="text-right px-3 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium">Vente</th>
-                          <th className="text-right px-3 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium">Valeur</th>
-                          <th className="text-right px-3 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium">Profit</th>
-                          <th className="text-center px-3 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium">Marketplace</th>
-                          <th className="text-center px-3 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium">Actions</th>
+                          <th className="text-left px-3 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium min-w-[120px]">Produit</th>
+                          <th className="text-center px-3 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium w-[90px]">Total reçu</th>
+                          <th className="text-center px-3 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium w-[80px]">Réception</th>
+                          <th className="text-center px-3 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium w-[100px]">En stock</th>
+                          <th className="text-right px-3 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium w-[90px]">Coût unitaire</th>
+                          <th className="text-right px-3 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium w-[90px]">Coût total lot</th>
+                          <th className="text-center px-3 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium w-[70px]">Stock</th>
+                          <th className="text-right px-3 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium w-[80px]">Vente</th>
+                          <th className="text-right px-3 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium w-[80px]">Valeur</th>
+                          <th className="text-right px-3 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium w-[80px]">Profit</th>
+                          <th className="text-center px-3 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium w-[100px]">Marketplace</th>
+                          <th className="text-center px-3 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium w-[80px]">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-base-700/50">
@@ -262,36 +283,71 @@ export default function StockPage() {
                             const isProfitPos = profit >= 0
                             const isEditing = editingId === item.id
                             const isDateEditing = dateEditingId === item.id
+                            const isRecuEditing = recuEditingId === item.id
+                            const ecart = item.ecart_reception !== null && item.ecart_reception !== undefined ? Number(item.ecart_reception) : null
+                            const totalRecu = item.total_recu !== null && item.total_recu !== undefined ? Number(item.total_recu) : null
                             return (
                               <motion.tr key={item.id} layout initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}
                                 transition={{ duration: 0.2, delay: idx * 0.02 }} className="hover:bg-base-800/50 transition-colors">
                                 <td className="px-3 py-3">
                                   <div className="flex items-center gap-2.5">
-                                    <span className="font-medium text-ink-50">{item.produit}</span>
-                                    {item.categorie && <span className="badge-cat">{item.categorie}</span>}
+                                    <span className="font-medium text-ink-50 truncate">{item.produit}</span>
+                                    {item.categorie && <span className="badge-cat shrink-0">{item.categorie}</span>}
                                     {isLow && (
-                                      <motion.span animate={{ opacity: [1, 0.5, 1] }} transition={{ duration: 2, repeat: Infinity }} className="badge-low inline-flex items-center gap-0.5">
+                                      <motion.span animate={{ opacity: [1, 0.5, 1] }} transition={{ duration: 2, repeat: Infinity }} className="badge-low inline-flex items-center gap-0.5 shrink-0">
                                         <AlertTriangle className="w-2.5 h-2.5" />Faible
                                       </motion.span>
                                     )}
                                   </div>
                                 </td>
-                                {/* Vérifié checkbox */}
+                                {/* Total reçu — édition inline */}
                                 <td className="px-3 py-3 text-center">
-                                  <button onClick={() => toggleVerifie(item.id, item.verifie)} className="transition-all hover:scale-110" title={item.verifie ? 'Marquer à vérifier' : 'Marquer vérifié'}>
-                                    {item.verifie ? <CheckCircle2 className="w-4.5 h-4.5 text-accent" /> : <Circle className="w-4.5 h-4.5 text-ink-400/40 hover:text-accent/50" />}
-                                  </button>
+                                  {isRecuEditing ? (
+                                    <div className="flex items-center justify-center gap-0.5">
+                                      <input
+                                        id={`recu-input-${item.id}`}
+                                        type="number"
+                                        min="0"
+                                        value={recuEditVal}
+                                        onChange={e => setRecuEditVal(e.target.value)}
+                                        onKeyDown={e => { if (e.key === 'Enter') saveTotalRecu(item.id); if (e.key === 'Escape') cancelRecuEdit() }}
+                                        onBlur={() => saveTotalRecu(item.id)}
+                                        className="w-16 bg-base-800 border border-accent/50 rounded px-2 py-1 text-xs text-ink-50 font-mono text-center outline-none"
+                                        autoFocus
+                                      />
+                                    </div>
+                                  ) : (
+                                    <div className="inline-flex flex-col items-center gap-0.5">
+                                      <button onClick={() => startRecuEdit(item)} className="text-xs font-mono text-ink-400 hover:text-accent transition-all cursor-pointer border-b border-dotted border-ink-400/30 hover:border-accent/50">
+                                        {totalRecu !== null ? totalRecu : '—'}
+                                      </button>
+                                      {ecart !== null && (
+                                        ecart === 0 ? (
+                                          <span className="text-[10px] font-medium text-accent bg-accent/10 px-1.5 py-0.5 rounded-full inline-flex items-center gap-0.5">
+                                            <Check className="w-2.5 h-2.5" />Conforme
+                                          </span>
+                                        ) : ecart > 0 ? (
+                                          <span className="text-[10px] font-medium text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded-full border border-amber-400/20">
+                                            +{ecart} reçu en plus
+                                          </span>
+                                        ) : (
+                                          <span className="text-[10px] font-medium text-danger bg-danger/10 px-1.5 py-0.5 rounded-full border border-danger/20">
+                                            {Math.abs(ecart)} manquant(s)
+                                          </span>
+                                        )
+                                      )}
+                                    </div>
+                                  )}
                                 </td>
                                 {/* Réception — date editable inline */}
                                 <td className="px-3 py-3 text-center">
                                   {isDateEditing ? (
-                                    <div className="flex items-center justify-center gap-1">
+                                    <div className="flex items-center justify-center gap-0.5">
                                       <input id={`date-input-${item.id}`} type="date" value={dateEditVal}
                                         onChange={e => setDateEditVal(e.target.value)}
                                         onKeyDown={e => { if (e.key === 'Enter') saveDate(item.id); if (e.key === 'Escape') cancelDateEdit() }}
-                                        className="w-32 bg-base-800 border border-accent/50 rounded px-2 py-1 text-xs text-ink-50 outline-none" />
-                                      <button onClick={() => saveDate(item.id)} className="p-0.5 rounded text-accent hover:text-accent/80"><Check className="w-3 h-3" /></button>
-                                      <button onClick={cancelDateEdit} className="p-0.5 rounded text-ink-400 hover:text-ink-50"><X className="w-3 h-3" /></button>
+                                        onBlur={() => saveDate(item.id)}
+                                        className="w-28 bg-base-800 border border-accent/50 rounded px-2 py-1 text-xs text-ink-50 outline-none" />
                                     </div>
                                   ) : (
                                     <button onClick={() => startDateEdit(item)} className="inline-flex items-center gap-1 text-xs text-ink-400 hover:text-accent transition-all group">
@@ -302,30 +358,29 @@ export default function StockPage() {
                                 </td>
                                 {/* En stock depuis — badge */}
                                 <td className="px-3 py-3 text-center"><JoursBadge jours={item.jours_en_stock} /></td>
-                                <td className="px-3 py-3 text-right font-mono text-ink-400">{CFMT(item.prix_achat_unitaire)}</td>
-                                <td className="px-3 py-3 text-right font-mono font-semibold text-ink-50">{CFMT(coutLot)}</td>
-                                <td className="px-3 py-3 text-center">
+                                <td className="px-3 py-3 text-right font-mono text-ink-400 whitespace-nowrap">{CFMT(item.prix_achat_unitaire)}</td>
+                                <td className="px-3 py-3 text-right font-mono font-semibold text-ink-50 whitespace-nowrap">{CFMT(coutLot)}</td>
+                                <td className="px-3 py-3 text-center whitespace-nowrap">
                                   <span className={`font-mono font-semibold ${isLow ? 'text-danger' : 'text-accent'}`}>{item.qte_restante}</span>
                                   <span className="font-mono text-ink-400/40 text-[11px]"> /{item.qte_stock}</span>
                                 </td>
-                                <td className="px-3 py-3 text-right font-mono text-ink-400">{CFMT(item.prix_revente_unitaire)}</td>
-                                <td className="px-3 py-3 text-right font-mono font-bold text-accent">{CFMT(item.valeur_stock_restant)}</td>
-                                <td className={`px-3 py-3 text-right font-mono font-bold ${isProfitPos ? 'text-accent' : 'text-danger'}`}>{CFMT(profit)}</td>
+                                <td className="px-3 py-3 text-right font-mono text-ink-400 whitespace-nowrap">{CFMT(item.prix_revente_unitaire)}</td>
+                                <td className="px-3 py-3 text-right font-mono font-bold text-accent whitespace-nowrap">{CFMT(item.valeur_stock_restant)}</td>
+                                <td className={`px-3 py-3 text-right font-mono font-bold whitespace-nowrap ${isProfitPos ? 'text-accent' : 'text-danger'}`}>{CFMT(profit)}</td>
                                 {/* Marketplace */}
                                 <td className="px-3 py-3 text-center">
                                   {isEditing ? (
-                                    <div className="flex items-center justify-center gap-1">
+                                    <div className="flex items-center justify-center gap-0.5">
                                       <input id={`plat-input-${item.id}`} list="plat-suggestions" value={editVal}
                                         onChange={e => setEditVal(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') savePlateforme(item.id); if (e.key === 'Escape') cancelEdit() }}
-                                        className="w-28 bg-base-800 border border-accent/50 rounded px-2 py-1 text-xs text-ink-50 font-sans outline-none" placeholder="Plateforme…" />
+                                        onBlur={() => savePlateforme(item.id)}
+                                        className="w-24 bg-base-800 border border-accent/50 rounded px-2 py-1 text-xs text-ink-50 font-sans outline-none" placeholder="Plateforme…" />
                                       <datalist id="plat-suggestions">{SUGGESTIONS_MARCHE.map(s => <option key={s} value={s} />)}</datalist>
-                                      <button onClick={() => savePlateforme(item.id)} className="p-0.5 rounded text-accent hover:text-accent/80"><Check className="w-3 h-3" /></button>
-                                      <button onClick={cancelEdit} className="p-0.5 rounded text-ink-400 hover:text-ink-50"><X className="w-3 h-3" /></button>
                                     </div>
                                   ) : (
-                                    <button onClick={() => startEdit(item)} className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium text-ink-400 hover:text-accent hover:bg-base-800 transition-all group">
-                                      <span>{item.plateforme_conseillee || '–'}</span>
-                                      <Pencil className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                    <button onClick={() => startEdit(item)} className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium text-ink-400 hover:text-accent hover:bg-base-800 transition-all group">
+                                      <span className="truncate max-w-[80px]">{item.plateforme_conseillee || '–'}</span>
+                                      <Pencil className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                                     </button>
                                   )}
                                 </td>
@@ -366,18 +421,24 @@ export default function StockPage() {
                         const coutLot = item.cout_total_lot ?? (Number(item.prix_achat_unitaire) * Number(item.qte_stock))
                         const profit = Number(item.profit_potentiel ?? 0)
                         const isProfitPos = profit >= 0
+                        const ecart = item.ecart_reception !== null && item.ecart_reception !== undefined ? Number(item.ecart_reception) : null
+                        const totalRecu = item.total_recu !== null && item.total_recu !== undefined ? Number(item.total_recu) : null
+                        let ecartBadge = null
+                        if (ecart !== null) {
+                          if (ecart === 0) ecartBadge = <span className="text-[10px] text-accent"><Check className="w-2.5 h-2.5 inline" /> Conforme</span>
+                          else if (ecart > 0) ecartBadge = <span className="text-[10px] text-amber-400">+{ecart} reçu en plus</span>
+                          else ecartBadge = <span className="text-[10px] text-danger">{Math.abs(ecart)} manquant(s)</span>
+                        }
                         return (
                           <motion.div key={item.id} layout initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} className="card-dash p-4">
                             <div className="flex items-start justify-between gap-2">
-                              <div className="flex items-center gap-2">
-                                <p className="font-medium text-ink-50 text-sm">{item.produit}</p>
-                                {item.verifie ? <CheckCircle2 className="w-3.5 h-3.5 text-accent shrink-0" /> : <Circle className="w-3.5 h-3.5 text-ink-400/30 shrink-0" />}
-                              </div>
+                              <p className="font-medium text-ink-50 text-sm">{item.produit}</p>
                               {isLow && <motion.span animate={{ opacity: [1, 0.5, 1] }} transition={{ duration: 2, repeat: Infinity }} className="badge-low inline-flex items-center gap-0.5 shrink-0"><AlertTriangle className="w-2.5 h-2.5" />Faible</motion.span>}
                             </div>
                             <p className="text-xs text-ink-400 mt-0.5">{item.categorie}</p>
                             <div className="grid grid-cols-2 gap-1 mt-2 text-xs">
-                              <span className="text-ink-400">Réception: <strong className="text-ink-50 font-mono">{fmtDate(item.date_reception)}</strong></span>
+                              <span className="text-ink-400">Total reçu: <strong className="font-mono text-ink-50">{totalRecu ?? '—'}</strong> {ecartBadge}</span>
+                              <span className="text-ink-400">Réception: <strong className="font-mono text-ink-50">{fmtDate(item.date_reception)}</strong></span>
                               <span className="text-ink-400"><JoursBadge jours={item.jours_en_stock} /></span>
                               <span className="text-ink-400">Stock: <strong className="font-mono text-ink-50">{item.qte_stock}</strong></span>
                               <span className="text-ink-400">Restant: <strong className={`font-mono ${isLow ? 'text-danger' : 'text-accent'}`}>{item.qte_restante}</strong></span>
