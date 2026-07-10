@@ -109,6 +109,10 @@ export default function StockPage() {
     coutTotal: filtered.reduce((s, i) => s + Number(i.cout_total_lot ?? 0), 0),
     totalVente: filtered.reduce((s, i) => s + Number(i.valeur_stock_restant ?? 0), 0),
     profit: filtered.reduce((s, i) => s + Number(i.profit_potentiel ?? 0), 0),
+    totalRecu: filtered.reduce((s, i) => s + (i.total_recu !== null && i.total_recu !== undefined ? Number(i.total_recu) : 0), 0),
+    qteStock: filtered.reduce((s, i) => s + Number(i.qte_stock ?? 0), 0),
+    qteVendue: filtered.reduce((s, i) => s + Number(i.qte_vendue ?? 0), 0),
+    qteRestante: filtered.reduce((s, i) => s + Number(i.qte_restante ?? 0), 0),
   }), [filtered])
 
   const metrics = useMemo(() => ({
@@ -447,13 +451,27 @@ export default function StockPage() {
                       <tfoot>
                         <tr className="border-t-2 border-accent/30 bg-base-900/80">
                           <td className="px-3 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium">Totaux</td>
-                          <td colSpan={3} />
-                          <td colSpan={2} />
-                          <td />
-                          <td />
+                          {/* Total reçu */}
+                          <td className="px-3 py-3 text-center font-mono font-bold text-ink-50"><CountUp end={totals.totalRecu} decimals={0} /></td>
+                          {/* Réception */}
+                          <td className="px-3 py-3 text-center text-xs text-ink-400/40 font-sans">—</td>
+                          {/* En stock */}
+                          <td className="px-3 py-3 text-center text-xs text-ink-400/40 font-sans">—</td>
+                          {/* Coût unitaire */}
+                          <td className="px-3 py-3 text-right text-xs text-ink-400/40 font-sans">—</td>
+                          {/* Coût total lot */}
+                          <td className="px-3 py-3 text-right font-mono font-bold text-ink-50"><CountUp end={totals.coutTotal} decimals={2} prefix="€" /></td>
+                          {/* Stock : restante / totale */}
+                          <td className="px-3 py-3 text-center font-mono font-bold text-ink-50">{totals.qteRestante}<span className="font-mono text-ink-400/40 text-[11px]"> /{totals.qteStock}</span></td>
+                          {/* Vente */}
+                          <td className="px-3 py-3 text-right text-xs text-ink-400/40 font-sans">—</td>
+                          {/* Valeur */}
                           <td className="px-3 py-3 text-right font-mono font-bold text-accent"><CountUp end={totals.totalVente} decimals={2} prefix="€" /></td>
+                          {/* Profit */}
                           <td className={`px-3 py-3 text-right font-mono font-bold ${totals.profit >= 0 ? 'text-accent' : 'text-danger'}`}><CountUp end={totals.profit} decimals={2} prefix="€" /></td>
-                          <td className="px-3 py-3" />
+                          {/* Marketplace */}
+                          <td className="px-3 py-3 text-center text-xs text-ink-400/40 font-sans">—</td>
+                          {/* Actions */}
                           <td className="px-3 py-3" />
                         </tr>
                       </tfoot>
@@ -507,6 +525,8 @@ export default function StockPage() {
                     <div className="card-dash p-4 border border-accent/20">
                       <div className="flex justify-between items-center mb-2"><span className="text-xs text-ink-400 font-sans font-medium uppercase tracking-wider">Totaux</span></div>
                       <div className="grid grid-cols-3 gap-2 text-xs">
+                        <div><span className="text-ink-400">Total reçu</span><p className="font-mono font-bold text-ink-50"><CountUp end={totals.totalRecu} /></p></div>
+                        <div><span className="text-ink-400">Stock</span><p className="font-mono font-bold text-ink-50">{totals.qteRestante}<span className="text-ink-400/40 text-[10px]"> /{totals.qteStock}</span></p></div>
                         <div><span className="text-ink-400">Coût lots</span><p className="font-mono font-bold text-ink-50"><CountUp end={totals.coutTotal} decimals={2} prefix="€" /></p></div>
                         <div><span className="text-ink-400">Vente</span><p className="font-mono font-bold text-accent"><CountUp end={totals.totalVente} decimals={2} prefix="€" /></p></div>
                         <div><span className="text-ink-400">Profit</span><p className={`font-mono font-bold ${totals.profit >= 0 ? 'text-accent' : 'text-danger'}`}><CountUp end={totals.profit} decimals={2} prefix="€" /></p></div>
