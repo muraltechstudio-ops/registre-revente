@@ -6,8 +6,12 @@ import toast from 'react-hot-toast'
 
 const CATS = ['Informatique','Mode','Bijoux','Moto','Papeterie/Bureau','Hygiène/Beauté','Stock existant','Autre']
 const SUGGESTIONS_MARCHE = ['Vinted', 'Leboncoin', 'Leboncoin Pro', 'Vinted Pro', 'Facebook Marketplace', 'TikTok Shop', 'Vestiaire Collective', 'Joli Closet', 'Whatnot']
-const EMPTY = { produit: '', categorie: 'Autre', prix_achat_unitaire: '', qte_stock: '', prix_revente_unitaire: '', plateforme_conseillee: '' }
+const EMPTY = {
+  produit: '', categorie: 'Autre', prix_achat_unitaire: '', qte_stock: '', prix_revente_unitaire: '',
+  plateforme_conseillee: '', date_reception: '', verifie: false,
+}
 const CFMT = (v) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v)
+const todayStr = () => new Date().toISOString().split('T')[0]
 
 export default function StockModal({ isOpen, onClose, onSave, item }) {
   const [f, setF] = useState(EMPTY)
@@ -24,13 +28,21 @@ export default function StockModal({ isOpen, onClose, onSave, item }) {
         qte_stock: item.qte_stock?.toString() ?? '',
         prix_revente_unitaire: item.prix_revente_unitaire?.toString() ?? '',
         plateforme_conseillee: item.plateforme_conseillee || '',
+        date_reception: item.date_reception || '',
+        verifie: item.verifie ?? false,
       })
       setEp(item.photo_url ?? null)
-    } else { setF(EMPTY); setEp(null) }
+    } else {
+      setF({ ...EMPTY, date_reception: todayStr() })
+      setEp(null)
+    }
     setPf(null); setPp(null)
   }, [item, isOpen])
 
-  const chg = (field) => (e) => setF(p => ({ ...p, [field]: e.target.value }))
+  const chg = (field) => (e) => {
+    const val = e.target.type === 'checkbox' ? e.target.checked : e.target.value
+    setF(p => ({ ...p, [field]: val }))
+  }
 
   const coutTotalLot = useMemo(() => {
     const pu = Number.parseFloat(f.prix_achat_unitaire)
@@ -67,6 +79,8 @@ export default function StockModal({ isOpen, onClose, onSave, item }) {
         prix_revente_unitaire: parseFloat(f.prix_revente_unitaire),
         plateforme_conseillee: f.plateforme_conseillee || null,
         photo_url: url,
+        date_reception: f.date_reception || null,
+        verifie: f.verifie,
       })
       onClose()
     } catch (err) { toast.error("Erreur") }
@@ -76,22 +90,11 @@ export default function StockModal({ isOpen, onClose, onSave, item }) {
   return (
     <AnimatePresence>
       {isOpen && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.2 }}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
-          onClick={onClose}
-        >
-          <motion.div
-            initial={{ opacity: 0, scale: 0.96 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.96 }}
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4" onClick={onClose}>
+          <motion.div initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.96 }}
             transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-            className="bg-base-900 border border-base-700 rounded-lg p-6 w-full max-w-lg shadow-xl"
-            onClick={e => e.stopPropagation()}
-          >
+            className="bg-base-900 border border-base-700 rounded-lg p-6 w-full max-w-lg shadow-xl" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-5">
               <h2 className="text-sm font-semibold text-ink-50 font-sans uppercase tracking-wider">
                 {item ? "Modifier l'article" : 'Ajouter un article'}
@@ -149,20 +152,29 @@ export default function StockModal({ isOpen, onClose, onSave, item }) {
                 <label className="block text-xs font-medium text-ink-400 mb-1">Prix revente unitaire (€)</label>
                 <input type="number" step="0.01" min="0" required value={f.prix_revente_unitaire} onChange={chg('prix_revente_unitaire')} className="input-field w-full font-mono" placeholder="0.00" />
               </div>
-              {/* Marketplace — champ libre avec suggestions */}
+
+              {/* Marketplace */}
               <div>
                 <label className="block text-xs font-medium text-ink-400 mb-1">Marketplace conseillée</label>
-                <input
-                  type="text"
-                  list="modal-plat-suggestions"
-                  value={f.plateforme_conseillee}
-                  onChange={chg('plateforme_conseillee')}
-                  className="input-field w-full font-sans"
-                  placeholder="Ex. Vinted, Leboncoin, ou plusieurs…"
-                />
+                <input type="text" list="modal-plat-suggestions" value={f.plateforme_conseillee} onChange={chg('plateforme_conseillee')}
+                  className="input-field w-full font-sans" placeholder="Ex. Vinted, Leboncoin, ou plusieurs…" />
                 <datalist id="modal-plat-suggestions">
                   {SUGGESTIONS_MARCHE.map(s => <option key={s} value={s} />)}
                 </datalist>
+              </div>
+
+              {/* Date réception + Vérifié */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-ink-400 mb-1">Date de réception</label>
+                  <input type="date" value={f.date_reception} onChange={chg('date_reception')} className="input-field w-full" />
+                </div>
+                <div className="flex items-end pb-2">
+                  <label className="flex items-center gap-2.5 cursor-pointer">
+                    <input type="checkbox" checked={f.verifie} onChange={chg('verifie')} className="w-4 h-4 rounded border-base-700 bg-base-800 text-accent focus:ring-accent/20" />
+                    <span className="text-xs font-medium text-ink-400">Vérifié</span>
+                  </label>
+                </div>
               </div>
 
               <div className="flex justify-end gap-3 pt-2 border-t border-base-700">
