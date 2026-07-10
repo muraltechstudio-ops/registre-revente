@@ -23,7 +23,8 @@ export default function StockModal({ isOpen, onClose, onSave, item }) {
   useEffect(() => {
     if (item) {
       setF({
-        produit: item.produit ?? '', categorie: item.categorie ?? 'Autre',
+        produit: item.produit ?? '',
+        categorie: item.categorie ?? 'Autre',
         prix_achat_unitaire: item.prix_achat_unitaire?.toString() ?? '',
         qte_stock: item.qte_stock?.toString() ?? '',
         prix_revente_unitaire: item.prix_revente_unitaire?.toString() ?? '',
@@ -59,6 +60,18 @@ export default function StockModal({ isOpen, onClose, onSave, item }) {
 
   const delPhoto = () => { setPf(null); setPp(null); setEp(null) }
 
+  /* ──── Payload : uniquement les champs éditables, jamais les colonnes calculées ──── */
+  const buildPayload = () => ({
+    produit: f.produit,
+    categorie: f.categorie,
+    prix_achat_unitaire: parseFloat(f.prix_achat_unitaire),
+    qte_stock: parseInt(f.qte_stock, 10),
+    prix_revente_unitaire: parseFloat(f.prix_revente_unitaire),
+    plateforme_conseillee: f.plateforme_conseillee || null,
+    photo_url: ep,
+    date_reception: f.date_reception || null,
+  })
+
   const submit = async (e) => {
     e.preventDefault()
     setLoading(true)
@@ -71,15 +84,8 @@ export default function StockModal({ isOpen, onClose, onSave, item }) {
         if (ue) { toast.error("Erreur upload"); setLoading(false); return }
         url = supabase.storage.from('produits-photos').getPublicUrl(fn).data.publicUrl
       }
-      await onSave({
-        produit: f.produit, categorie: f.categorie,
-        prix_achat_unitaire: parseFloat(f.prix_achat_unitaire),
-        qte_stock: parseInt(f.qte_stock, 10),
-        prix_revente_unitaire: parseFloat(f.prix_revente_unitaire),
-        plateforme_conseillee: f.plateforme_conseillee || null,
-        photo_url: url,
-        date_reception: f.date_reception || null,
-      })
+      const payload = { ...buildPayload(), photo_url: url }
+      await onSave(payload)
       onClose()
     } catch (err) { toast.error("Erreur") }
     finally { setLoading(false) }

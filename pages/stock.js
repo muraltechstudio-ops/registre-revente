@@ -15,6 +15,20 @@ const SUGGESTIONS_MARCHE = ['Vinted', 'Leboncoin', 'Leboncoin Pro', 'Vinted Pro'
 const CFMT = (v) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v)
 const LOW = 3
 
+/* ──── Champs éditables autorisés dans les écritures revente_stock ──── */
+const STOCK_EDITABLE = [
+  'produit', 'categorie', 'prix_achat_unitaire', 'qte_stock', 'prix_revente_unitaire',
+  'plateforme_conseillee', 'date_reception', 'total_recu', 'photo_url',
+]
+
+const stripComputed = (obj) => {
+  const clean = {}
+  for (const key of STOCK_EDITABLE) {
+    if (key in obj) clean[key] = obj[key]
+  }
+  return clean
+}
+
 /* ──── Helpers ──── */
 const fmtDate = (d) => {
   if (!d) return '—'
@@ -104,9 +118,29 @@ export default function StockPage() {
     coutTotal: items.reduce((s, i) => s + Number(i.cout_total_lot ?? 0), 0),
   }), [items])
 
-  const addItem = async (fd) => { const { error } = await supabase.from('revente_stock').insert([fd]); if (error) throw error; toast.success('Article ajouté'); await fetch() }
-  const editItem = async (fd) => { const { error } = await supabase.from('revente_stock').update(fd).eq('id', edit.id); if (error) throw error; toast.success('Article modifié'); await fetch() }
-  const removeItem = async (id) => { const { error } = await supabase.from('revente_stock').delete().eq('id', id); if (error) { toast.error('Erreur'); return }; toast.success('Article supprimé'); setDel(null); await fetch() }
+  /* ──── CRUD — toujours passer par stripComputed pour ne jamais envoyer les colonnes calculées ──── */
+  const addItem = async (fd) => {
+    const cleaned = stripComputed(fd)
+    const { error } = await supabase.from('revente_stock').insert([cleaned])
+    if (error) throw error
+    toast.success('Article ajouté')
+    await fetch()
+  }
+
+  const editItem = async (fd) => {
+    const cleaned = stripComputed(fd)
+    const { error } = await supabase.from('revente_stock').update(cleaned).eq('id', edit.id)
+    if (error) throw error
+    toast.success('Article modifié')
+    await fetch()
+  }
+
+  const removeItem = async (id) => {
+    const { error } = await supabase.from('revente_stock').delete().eq('id', id)
+    if (error) { toast.error('Erreur'); return }
+    toast.success('Article supprimé')
+    setDel(null); await fetch()
+  }
 
   /* ──── Sauvegarde inline marketplace ──── */
   const savePlateforme = async (id) => {
@@ -150,6 +184,7 @@ export default function StockPage() {
   const cancelDateEdit = () => { setDateEditingId(null); setDateEditVal('') }
 
   /* ──── Sauvegarde inline total_recu ──── */
+  /* Uniquement { total_recu: val } — indépendant de qte_stock et cout_total_lot */
   const saveTotalRecu = async (id) => {
     const raw = recuEditVal.trim()
     const val = raw === '' || raw === '-' ? null : parseInt(raw, 10)
@@ -157,12 +192,26 @@ export default function StockPage() {
       toast.error('Veuillez entrer un nombre valide')
       return
     }
-    const { error } = await supabase.from('revente_stock').update({ total_recu: val }).eq('id', id)
+    const { error } = await supabase
+      .from('revente_stock')
+      .update({ total_recu: val })
+      .eq('id', id)
     if (error) { toast.error("Erreur lors de l'enregistrement"); return }
+
     toast.success(val !== null ? `Total reçu: ${val}` : 'Total reçu effacé')
     setRecuEditingId(null)
-    // Mise à jour locale : on met à jour total_recu, la vue recalculera ecart_reception au prochain fetch
-    setItems(prev => prev.map(i => i.id === id ? { ...i, total_recu: val, ecart_reception: val !== null ? val - Number(i.qte_stock) : null } : i))
+
+    // Mise à jour locale : ne touche QUE total_recu et ecart_reception
+    // qte_stock, cout_total_lot et tous les autres champs restent intacts
+    setItems(prev => prev.map(i =>
+      i.id === id
+        ? {
+            ...i,
+            total_recu: val,
+            ecart_reception: val !== null ? val - Number(i.qte_stock) : null,
+          }
+        : i
+    ))
   }
 
   const startRecuEdit = (item) => {
@@ -237,7 +286,6 @@ export default function StockPage() {
                   <button key={c} onClick={() => setCat(cat === c ? null : c)}
                     className={`px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-all ${cat === c ? 'bg-accent text-base-950 border-accent' : 'bg-base-800 text-ink-400 border-base-700 hover:border-accent/40'}`}>{c}</button>
                 ))}
-                {/* Filtre Écarts détectés */}
                 <button onClick={() => setShowEcart(!showEcart)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${showEcart ? 'bg-danger text-base-950 border-danger' : 'bg-base-800 text-ink-400 border-base-700 hover:border-danger/40 hover:text-danger'}`}>
                   Écarts détectés {ecartCount > 0 && <span className="ml-1 font-mono">({ecartCount})</span>}
@@ -255,7 +303,7 @@ export default function StockPage() {
                 </motion.div>
               ) : (
                 <>
-                  {/* Desktop table — wrapper avec scroll horizontal */}
+                  {/* Desktop table */}
                   <div className="hidden sm:block overflow-x-auto card-dash">
                     <table className="min-w-[1180px] w-full text-sm">
                       <thead>
@@ -300,7 +348,7 @@ export default function StockPage() {
                                     )}
                                   </div>
                                 </td>
-                                {/* Total reçu — édition inline */}
+                                {/* Total reçu */}
                                 <td className="px-3 py-3 text-center">
                                   {isRecuEditing ? (
                                     <div className="flex items-center justify-center gap-0.5">
@@ -339,7 +387,7 @@ export default function StockPage() {
                                     </div>
                                   )}
                                 </td>
-                                {/* Réception — date editable inline */}
+                                {/* Réception */}
                                 <td className="px-3 py-3 text-center">
                                   {isDateEditing ? (
                                     <div className="flex items-center justify-center gap-0.5">
@@ -356,7 +404,7 @@ export default function StockPage() {
                                     </button>
                                   )}
                                 </td>
-                                {/* En stock depuis — badge */}
+                                {/* En stock depuis */}
                                 <td className="px-3 py-3 text-center"><JoursBadge jours={item.jours_en_stock} /></td>
                                 <td className="px-3 py-3 text-right font-mono text-ink-400 whitespace-nowrap">{CFMT(item.prix_achat_unitaire)}</td>
                                 <td className="px-3 py-3 text-right font-mono font-semibold text-ink-50 whitespace-nowrap">{CFMT(coutLot)}</td>
@@ -396,7 +444,6 @@ export default function StockPage() {
                           })}
                         </AnimatePresence>
                       </tbody>
-                      {/* Totaux */}
                       <tfoot>
                         <tr className="border-t-2 border-accent/30 bg-base-900/80">
                           <td className="px-3 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium">Totaux</td>
@@ -457,7 +504,6 @@ export default function StockPage() {
                         )
                       })}
                     </AnimatePresence>
-                    {/* Totaux mobile */}
                     <div className="card-dash p-4 border border-accent/20">
                       <div className="flex justify-between items-center mb-2"><span className="text-xs text-ink-400 font-sans font-medium uppercase tracking-wider">Totaux</span></div>
                       <div className="grid grid-cols-3 gap-2 text-xs">
@@ -475,7 +521,6 @@ export default function StockPage() {
 
         <StockModal isOpen={modal} onClose={() => { setModal(false); setEdit(null) }} onSave={edit ? editItem : addItem} item={edit} />
 
-        {/* Delete confirmation */}
         <AnimatePresence>
           {del && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
