@@ -91,18 +91,38 @@ export default function VentesPage() {
   const submit = async (e) => {
     e.preventDefault()
     try {
-      const { error } = await supabase.from('revente_ventes').insert([{
-        stock_id: form.stock_id || null, date_vente: form.date_vente, produit: form.produit, categorie: form.categorie || null,
-        prix_achat_unitaire: Number.parseFloat(form.prix_achat_unitaire), prix_revente_unitaire: Number.parseFloat(form.prix_revente_unitaire),
-        qte_vendue: Number.parseInt(form.qte_vendue, 10), plateforme: form.plateforme, statut: form.statut,
-        numero_suivi: form.numero_suivi || null, lien_vente: form.lien_vente || null,
-        client_nom: form.client_nom || null, client_prenom: form.client_prenom || null, client_adresse: form.client_adresse || null,
-      }])
+      // Construire le payload uniquement avec les colonnes garanties
+      const payload = {
+        stock_id: form.stock_id || null,
+        date_vente: form.date_vente,
+        produit: form.produit,
+        categorie: form.categorie || null,
+        prix_achat_unitaire: Number.parseFloat(form.prix_achat_unitaire),
+        prix_revente_unitaire: Number.parseFloat(form.prix_revente_unitaire),
+        qte_vendue: Number.parseInt(form.qte_vendue, 10),
+        plateforme: form.plateforme,
+        client_nom: form.client_nom || null,
+        client_prenom: form.client_prenom || null,
+        client_adresse: form.client_adresse || null,
+      }
+
+      // Colonnes optionnelles (peuvent ne pas exister en base si les migrations
+      // n'ont pas été exécutées) — les envoyer quand même, Supabase ignore
+      // les colonnes inexistantes si on utilise un objet JS... en fait non.
+      // On les envoie, si la colonne manque l'erreur sera claire.
+      if (form.statut) payload.statut = form.statut
+      if (form.numero_suivi) payload.numero_suivi = form.numero_suivi
+      if (form.lien_vente) payload.lien_vente = form.lien_vente
+
+      const { error } = await supabase.from('revente_ventes').insert([payload])
       if (error) throw new Error(error.message)
       toast.success('Vente enregistrée')
       setForm({ ...EMPTY, date_vente: TODAY() })
       setPreselect(false); await fetch()
-    } catch (err) { toast.error(err.message) }
+    } catch (err) {
+      console.error('Erreur insertion vente:', err)
+      toast.error('Erreur: ' + err.message + ' — Vérifie que les colonnes statut, numero_suivi et lien_vente existent dans revente_ventes.')
+    }
   }
 
   const updateStat = async (id, s) => {
