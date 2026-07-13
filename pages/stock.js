@@ -8,14 +8,13 @@ import StockModal from '../components/StockModal'
 import CountUp from '../components/CountUp'
 import MagneticButton from '../components/MagneticButton'
 import toast from 'react-hot-toast'
-import { Package, Plus, Search, ShoppingCart, Pencil, Trash2, AlertTriangle, Box, TrendingUp, Check, X, CalendarDays } from 'lucide-react'
+import { Package, Plus, Search, ShoppingCart, Pencil, Trash2, AlertTriangle, Box, Check, X, CalendarDays } from 'lucide-react'
 
 const CATS = ['Informatique','Mode','Bijoux','Moto','Papeterie/Bureau','Hygiène/Beauté','Stock existant','Autre']
 const SUGGESTIONS_MARCHE = ['Vinted', 'Leboncoin', 'Leboncoin Pro', 'Vinted Pro', 'Facebook Marketplace', 'TikTok Shop', 'Vestiaire Collective', 'Joli Closet', 'Whatnot']
 const CFMT = (v) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v)
 const LOW = 3
 
-/* ──── Champs éditables autorisés dans les écritures revente_stock ──── */
 const STOCK_EDITABLE = [
   'produit', 'categorie', 'prix_achat_unitaire', 'qte_stock', 'prix_revente_unitaire',
   'plateforme_conseillee', 'date_reception', 'total_recu', 'photo_url',
@@ -29,30 +28,36 @@ const stripComputed = (obj) => {
   return clean
 }
 
-/* ──── Helpers ──── */
 const fmtDate = (d) => {
   if (!d) return '—'
   const [y, m, day] = d.split('-')
   return `${day}/${m}/${y}`
 }
 
-/* ──── Skeleton shimmer ──── */
+/* ──── Skeleton ──── */
 function Skeleton({ className }) {
   return <div className={`bg-base-800 bg-shimmer bg-[length:200%_100%] animate-shimmer rounded-lg ${className}`} />
 }
 
-/* ──── Jours badge ──── */
-function JoursBadge({ jours }) {
-  if (jours === null || jours === undefined) {
+/* ──── Jours badge — avec fallback via created_at ──── */
+function JoursBadge({ jours, created_at }) {
+  let j = jours
+  // Fallback client si la BDD ne renvoie pas jours_en_stock
+  if ((j === null || j === undefined) && created_at) {
+    const created = new Date(created_at)
+    const now = new Date()
+    j = Math.floor((now - created) / (1000 * 60 * 60 * 24))
+  }
+  if (j === null || j === undefined) {
     return <span className="inline-flex px-2 py-0.5 rounded text-[10px] font-medium bg-base-800 text-ink-400/50">—</span>
   }
-  if (jours <= 15) {
-    return <span className="inline-flex px-2 py-0.5 rounded text-[10px] font-medium bg-base-800 text-ink-400">{jours} jours</span>
+  if (j <= 15) {
+    return <span className="inline-flex px-2 py-0.5 rounded text-[10px] font-medium bg-base-800 text-ink-400">{j} jours</span>
   }
-  if (jours <= 45) {
-    return <span className="inline-flex px-2 py-0.5 rounded text-[10px] font-medium bg-amber-400/10 text-amber-400 border border-amber-400/20">{jours} jours</span>
+  if (j <= 45) {
+    return <span className="inline-flex px-2 py-0.5 rounded text-[10px] font-medium bg-amber-400/10 text-amber-400 border border-amber-400/20">{j} jours</span>
   }
-  return <span className="inline-flex px-2 py-0.5 rounded text-[10px] font-medium bg-danger/10 text-danger border border-danger/20">{jours} jours — à écouler</span>
+  return <span className="inline-flex px-2 py-0.5 rounded text-[10px] font-medium bg-danger/10 text-danger border border-danger/20">{j} jours — à écouler</span>
 }
 
 export default function StockPage() {
@@ -97,6 +102,13 @@ export default function StockPage() {
 
   useEffect(() => { fetch() }, [fetch])
 
+  /* ──── Rafraîchir au retour de la page Ventes ──── */
+  useEffect(() => {
+    const handleRouteChange = () => { fetch() }
+    router.events?.on('routeChangeComplete', handleRouteChange)
+    return () => router.events?.off('routeChangeComplete', handleRouteChange)
+  }, [router.events, fetch])
+
   const filtered = useMemo(() => {
     let r = items
     if (cat) r = r.filter(i => i.categorie === cat)
@@ -122,7 +134,6 @@ export default function StockPage() {
     coutTotal: items.reduce((s, i) => s + Number(i.cout_total_lot ?? 0), 0),
   }), [items])
 
-  /* ──── CRUD — toujours passer par stripComputed pour ne jamais envoyer les colonnes calculées ──── */
   const addItem = async (fd) => {
     const cleaned = stripComputed(fd)
     const { error } = await supabase.from('revente_stock').insert([cleaned])
@@ -188,7 +199,6 @@ export default function StockPage() {
   const cancelDateEdit = () => { setDateEditingId(null); setDateEditVal('') }
 
   /* ──── Sauvegarde inline total_recu ──── */
-  /* Uniquement { total_recu: val } — indépendant de qte_stock et cout_total_lot */
   const saveTotalRecu = async (id) => {
     const raw = recuEditVal.trim()
     const val = raw === '' || raw === '-' ? null : parseInt(raw, 10)
@@ -196,24 +206,13 @@ export default function StockPage() {
       toast.error('Veuillez entrer un nombre valide')
       return
     }
-    const { error } = await supabase
-      .from('revente_stock')
-      .update({ total_recu: val })
-      .eq('id', id)
+    const { error } = await supabase.from('revente_stock').update({ total_recu: val }).eq('id', id)
     if (error) { toast.error("Erreur lors de l'enregistrement"); return }
-
     toast.success(val !== null ? `Total reçu: ${val}` : 'Total reçu effacé')
     setRecuEditingId(null)
-
-    // Mise à jour locale : ne touche QUE total_recu et ecart_reception
-    // qte_stock, cout_total_lot et tous les autres champs restent intacts
     setItems(prev => prev.map(i =>
       i.id === id
-        ? {
-            ...i,
-            total_recu: val,
-            ecart_reception: val !== null ? val - Number(i.qte_stock) : null,
-          }
+        ? { ...i, total_recu: val, ecart_reception: val !== null ? val - Number(i.qte_stock) : null }
         : i
     ))
   }
@@ -309,16 +308,16 @@ export default function StockPage() {
                 <>
                   {/* Desktop table */}
                   <div className="hidden sm:block overflow-x-auto card-dash">
-                    <table className="min-w-[1180px] w-full text-sm">
+                    <table className="min-w-[1350px] w-full text-sm">
                       <thead>
                         <tr className="border-b border-base-700 bg-base-900/50">
                           <th className="text-left px-3 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium min-w-[120px]">Produit</th>
-                          <th className="text-center px-3 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium w-[90px]">Total reçu</th>
+                          <th className="text-center px-3 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium w-[80px]">Total reçu</th>
                           <th className="text-center px-3 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium w-[80px]">Réception</th>
-                          <th className="text-center px-3 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium w-[100px]">En stock</th>
+                          <th className="text-center px-3 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium w-[110px]">En stock depuis</th>
                           <th className="text-right px-3 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium w-[90px]">Coût unitaire</th>
                           <th className="text-right px-3 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium w-[90px]">Coût total lot</th>
-                          <th className="text-center px-3 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium w-[70px]">Stock</th>
+                          <th className="text-center px-3 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium w-[85px]">Stock</th>
                           <th className="text-right px-3 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium w-[80px]">Vente</th>
                           <th className="text-right px-3 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium w-[80px]">Valeur</th>
                           <th className="text-right px-3 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium w-[80px]">Profit</th>
@@ -356,17 +355,11 @@ export default function StockPage() {
                                 <td className="px-3 py-3 text-center">
                                   {isRecuEditing ? (
                                     <div className="flex items-center justify-center gap-0.5">
-                                      <input
-                                        id={`recu-input-${item.id}`}
-                                        type="number"
-                                        min="0"
-                                        value={recuEditVal}
+                                      <input id={`recu-input-${item.id}`} type="number" min="0" value={recuEditVal}
                                         onChange={e => setRecuEditVal(e.target.value)}
                                         onKeyDown={e => { if (e.key === 'Enter') saveTotalRecu(item.id); if (e.key === 'Escape') cancelRecuEdit() }}
                                         onBlur={() => saveTotalRecu(item.id)}
-                                        className="w-16 bg-base-800 border border-accent/50 rounded px-2 py-1 text-xs text-ink-50 font-mono text-center outline-none"
-                                        autoFocus
-                                      />
+                                        className="w-16 bg-base-800 border border-accent/50 rounded px-2 py-1 text-xs text-ink-50 font-mono text-center outline-none" autoFocus />
                                     </div>
                                   ) : (
                                     <div className="inline-flex flex-col items-center gap-0.5">
@@ -408,8 +401,8 @@ export default function StockPage() {
                                     </button>
                                   )}
                                 </td>
-                                {/* En stock depuis */}
-                                <td className="px-3 py-3 text-center"><JoursBadge jours={item.jours_en_stock} /></td>
+                                {/* En stock depuis — avec fallback created_at */}
+                                <td className="px-3 py-3 text-center"><JoursBadge jours={item.jours_en_stock} created_at={item.created_at} /></td>
                                 <td className="px-3 py-3 text-right font-mono text-ink-400 whitespace-nowrap">{CFMT(item.prix_achat_unitaire)}</td>
                                 <td className="px-3 py-3 text-right font-mono font-semibold text-ink-50 whitespace-nowrap">{CFMT(coutLot)}</td>
                                 <td className="px-3 py-3 text-center whitespace-nowrap">
@@ -448,31 +441,21 @@ export default function StockPage() {
                           })}
                         </AnimatePresence>
                       </tbody>
+                      {/* Totaux */}
                       <tfoot>
                         <tr className="border-t-2 border-accent/30 bg-base-900/80">
                           <td className="px-3 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium">Totaux</td>
-                          {/* Total reçu */}
-                          <td className="px-3 py-3 text-center font-mono font-bold text-ink-50"><CountUp end={totals.totalRecu} decimals={0} /></td>
-                          {/* Réception */}
-                          <td className="px-3 py-3 text-center text-xs text-ink-400/40 font-sans">—</td>
-                          {/* En stock */}
-                          <td className="px-3 py-3 text-center text-xs text-ink-400/40 font-sans">—</td>
-                          {/* Coût unitaire */}
-                          <td className="px-3 py-3 text-right text-xs text-ink-400/40 font-sans">—</td>
-                          {/* Coût total lot */}
-                          <td className="px-3 py-3 text-right font-mono font-bold text-ink-50"><CountUp end={totals.coutTotal} decimals={2} prefix="€" /></td>
-                          {/* Stock : restante / totale */}
-                          <td className="px-3 py-3 text-center font-mono font-bold text-ink-50">{totals.qteRestante}<span className="font-mono text-ink-400/40 text-[11px]"> /{totals.qteStock}</span></td>
-                          {/* Vente */}
-                          <td className="px-3 py-3 text-right text-xs text-ink-400/40 font-sans">—</td>
-                          {/* Valeur */}
-                          <td className="px-3 py-3 text-right font-mono font-bold text-accent"><CountUp end={totals.totalVente} decimals={2} prefix="€" /></td>
-                          {/* Profit */}
-                          <td className={`px-3 py-3 text-right font-mono font-bold ${totals.profit >= 0 ? 'text-accent' : 'text-danger'}`}><CountUp end={totals.profit} decimals={2} prefix="€" /></td>
-                          {/* Marketplace */}
-                          <td className="px-3 py-3 text-center text-xs text-ink-400/40 font-sans">—</td>
-                          {/* Actions */}
-                          <td className="px-3 py-3" />
+                          <td><CountUp end={totals.totalRecu} decimals={0} /></td>
+                          <td className="text-center text-xs text-ink-400/40 font-sans">—</td>
+                          <td className="text-center text-xs text-ink-400/40 font-sans">—</td>
+                          <td className="text-right text-xs text-ink-400/40 font-sans">—</td>
+                          <td className="text-right font-mono font-bold text-ink-50"><CountUp end={totals.coutTotal} decimals={2} prefix="€" /></td>
+                          <td className="text-center font-mono font-bold text-ink-50">{totals.qteRestante}<span className="font-mono text-ink-400/40 text-[11px]"> /{totals.qteStock}</span></td>
+                          <td className="text-right text-xs text-ink-400/40 font-sans">—</td>
+                          <td className="text-right font-mono font-bold text-accent"><CountUp end={totals.totalVente} decimals={2} prefix="€" /></td>
+                          <td className={`text-right font-mono font-bold ${totals.profit >= 0 ? 'text-accent' : 'text-danger'}`}><CountUp end={totals.profit} decimals={2} prefix="€" /></td>
+                          <td className="text-center text-xs text-ink-400/40 font-sans">—</td>
+                          <td />
                         </tr>
                       </tfoot>
                     </table>
@@ -504,7 +487,7 @@ export default function StockPage() {
                             <div className="grid grid-cols-2 gap-1 mt-2 text-xs">
                               <span className="text-ink-400">Total reçu: <strong className="font-mono text-ink-50">{totalRecu ?? '—'}</strong> {ecartBadge}</span>
                               <span className="text-ink-400">Réception: <strong className="font-mono text-ink-50">{fmtDate(item.date_reception)}</strong></span>
-                              <span className="text-ink-400"><JoursBadge jours={item.jours_en_stock} /></span>
+                              <span className="text-ink-400"><JoursBadge jours={item.jours_en_stock} created_at={item.created_at} /></span>
                               <span className="text-ink-400">Stock: <strong className="font-mono text-ink-50">{item.qte_stock}</strong></span>
                               <span className="text-ink-400">Restant: <strong className={`font-mono ${isLow ? 'text-danger' : 'text-accent'}`}>{item.qte_restante}</strong></span>
                               <span className="text-ink-400">Coût unitaire: <strong className="font-mono text-ink-400">{CFMT(item.prix_achat_unitaire)}</strong></span>
@@ -522,11 +505,10 @@ export default function StockPage() {
                         )
                       })}
                     </AnimatePresence>
+                    {/* Totaux mobile */}
                     <div className="card-dash p-4 border border-accent/20">
                       <div className="flex justify-between items-center mb-2"><span className="text-xs text-ink-400 font-sans font-medium uppercase tracking-wider">Totaux</span></div>
                       <div className="grid grid-cols-3 gap-2 text-xs">
-                        <div><span className="text-ink-400">Total reçu</span><p className="font-mono font-bold text-ink-50"><CountUp end={totals.totalRecu} /></p></div>
-                        <div><span className="text-ink-400">Stock</span><p className="font-mono font-bold text-ink-50">{totals.qteRestante}<span className="text-ink-400/40 text-[10px]"> /{totals.qteStock}</span></p></div>
                         <div><span className="text-ink-400">Coût lots</span><p className="font-mono font-bold text-ink-50"><CountUp end={totals.coutTotal} decimals={2} prefix="€" /></p></div>
                         <div><span className="text-ink-400">Vente</span><p className="font-mono font-bold text-accent"><CountUp end={totals.totalVente} decimals={2} prefix="€" /></p></div>
                         <div><span className="text-ink-400">Profit</span><p className={`font-mono font-bold ${totals.profit >= 0 ? 'text-accent' : 'text-danger'}`}><CountUp end={totals.profit} decimals={2} prefix="€" /></p></div>
@@ -541,6 +523,7 @@ export default function StockPage() {
 
         <StockModal isOpen={modal} onClose={() => { setModal(false); setEdit(null) }} onSave={edit ? editItem : addItem} item={edit} />
 
+        {/* Delete confirmation */}
         <AnimatePresence>
           {del && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
