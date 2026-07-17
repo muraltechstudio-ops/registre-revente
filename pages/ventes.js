@@ -154,6 +154,14 @@ export default function VentesPage() {
     filtered.reduce((s, v) => s + (Number.parseFloat(v.prix_revente_unitaire) - Number.parseFloat(v.prix_achat_unitaire)) * v.qte_vendue, 0),
     [filtered])
 
+  const totalCA = useMemo(() =>
+    filtered.reduce((s, v) => s + Number.parseFloat(v.prix_revente_unitaire) * v.qte_vendue, 0),
+    [filtered])
+
+  const totalCost = useMemo(() =>
+    filtered.reduce((s, v) => s + Number.parseFloat(v.prix_achat_unitaire) * v.qte_vendue, 0),
+    [filtered])
+
   const csv = () => {
     const cols = [
       { key: 'date_vente', label: 'Date' }, { key: 'produit', label: 'Produit' },
@@ -337,7 +345,17 @@ export default function VentesPage() {
                   </tbody>
                   <tfoot>
                     <tr className="border-t border-base-700 bg-base-900/50">
-                      <td colSpan={7} className="px-4 py-3 text-right text-xs text-ink-400">Total lignes filtrées</td>
+                      <td colSpan={6} className="px-4 py-3 text-right text-xs text-ink-400 font-sans uppercase tracking-wider">Total CA</td>
+                      <td className="px-4 py-3 text-right font-mono font-bold text-ink-50">{CFMT(totalCA)}</td>
+                      <td />
+                    </tr>
+                    <tr className="bg-base-900/30">
+                      <td colSpan={6} className="px-4 py-3 text-right text-xs text-ink-400 font-sans uppercase tracking-wider">Total coût</td>
+                      <td className="px-4 py-3 text-right font-mono font-bold text-ink-400">{CFMT(totalCost)}</td>
+                      <td />
+                    </tr>
+                    <tr className="border-t border-accent/30 bg-base-900/80">
+                      <td colSpan={6} className="px-4 py-3 text-right text-xs text-ink-400 font-sans uppercase tracking-wider">Total bénéfice</td>
                       <td className={`px-4 py-3 text-right font-mono font-bold ${totalBen >= 0 ? 'text-accent' : 'text-danger'}`}>{CFMT(totalBen)}</td>
                       <td />
                     </tr>
@@ -379,8 +397,16 @@ export default function VentesPage() {
                   })}
                 </AnimatePresence>
                 <div className="card-dash p-4 border border-accent/20">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium text-ink-400">Total</span>
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-xs text-ink-400 font-sans uppercase tracking-wider">CA</span>
+                    <span className="font-mono font-bold text-ink-50">{CFMT(totalCA)}</span>
+                  </div>
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-xs text-ink-400 font-sans uppercase tracking-wider">Coût</span>
+                    <span className="font-mono font-bold text-ink-400">{CFMT(totalCost)}</span>
+                  </div>
+                  <div className="flex justify-between items-center pt-1 border-t border-base-700">
+                    <span className="text-xs text-ink-400 font-sans uppercase tracking-wider">Bénéfice</span>
                     <span className={`font-mono font-bold text-lg ${totalBen >= 0 ? 'text-accent' : 'text-danger'}`}>{CFMT(totalBen)}</span>
                   </div>
                 </div>
