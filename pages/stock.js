@@ -22,10 +22,24 @@ const STOCK_EDITABLE = [
 
 const stripComputed = (obj) => {
   const clean = {}
-  for (const key of STOCK_EDITABLE) {
-    if (key in obj) clean[key] = obj[key]
-  }
+  for (const key of STOCK_EDITABLE) { if (key in obj) clean[key] = obj[key] }
   return clean
+}
+
+/* ──── Recalcul de toutes les colonnes dérivées ──── */
+const recalcItem = (i) => {
+  const pu = Number(i.prix_achat_unitaire)
+  const pv = Number(i.prix_revente_unitaire)
+  const qte = Number(i.qte_stock ?? 0)
+  const qteV = Number(i.qte_vendue ?? 0)
+  const qteR = qte - qteV
+  return {
+    ...i,
+    cout_total_lot: Number(i.cout_total_lot) || (pu * qte),
+    qte_restante: Number(i.qte_restante) || Math.max(qteR, 0),
+    valeur_stock_restant: Number(i.valeur_stock_restant) || (Math.max(qteR, 0) * pv),
+    profit_potentiel: Number(i.profit_potentiel) || ((pv - pu) * Math.max(qteR, 0)),
+  }
 }
 
 const fmtDate = (d) => {
@@ -34,15 +48,13 @@ const fmtDate = (d) => {
   return `${day}/${m}/${y}`
 }
 
-/* ──── Skeleton ──── */
 function Skeleton({ className }) {
   return <div className={`bg-base-800 bg-shimmer bg-[length:200%_100%] animate-shimmer rounded-lg ${className}`} />
 }
 
-/* ──── Jours badge — avec fallback via created_at ──── */
+/* ──── Jours badge ──── */
 function JoursBadge({ jours, created_at }) {
   let j = jours
-  // Fallback client si la BDD ne renvoie pas jours_en_stock
   if ((j === null || j === undefined) && created_at) {
     const created = new Date(created_at)
     const now = new Date()
@@ -72,15 +84,10 @@ export default function StockPage() {
   const [edit, setEdit] = useState(null)
   const [del, setDel] = useState(null)
 
-  /* ──── Édition inline marketplace ──── */
   const [editingId, setEditingId] = useState(null)
   const [editVal, setEditVal] = useState('')
-
-  /* ──── Édition inline date réception ──── */
   const [dateEditingId, setDateEditingId] = useState(null)
   const [dateEditVal, setDateEditVal] = useState('')
-
-  /* ──── Édition inline total_recu ──── */
   const [recuEditingId, setRecuEditingId] = useState(null)
   const [recuEditVal, setRecuEditVal] = useState('')
 
@@ -91,29 +98,21 @@ export default function StockPage() {
       if (r.error) throw new Error(r.error.message)
       let photos = []
       try { const p = await supabase.from('revente_stock').select('id, photo_url'); if (!p.error) photos = p.data ?? [] } catch {}
-      setItems((r.data ?? []).map(i => {
-        // Recalcul forcé côté client pour ne pas dépendre de la vue
-        const pu = Number(i.prix_achat_unitaire)
-        const qte = Number(i.qte_stock)
-        const pv = Number(i.prix_revente_unitaire)
-        const qteV = Number(i.qte_vendue ?? 0)
-        const qteR = qte - qteV
-        return {
-          ...i,
-          photo_url: photos.find(p => p.id === i.id)?.photo_url ?? null,
-          cout_total_lot: Number(i.cout_total_lot) || (pu * qte),
-          qte_restante: Number(i.qte_restante) || qteR,
-          valeur_stock_restant: Number(i.valeur_stock_restant) || (qteR * pv),
-          profit_potentiel: Number(i.profit_potentiel) || ((pv - pu) * qteR),
-        }
-      }))
+      setItems((r.data ?? []).map(i => recalcItem({
+        ...i,
+        photo_url: photos.find(p => p.id === i.id)?.photo_url ?? null,
+      })))
     } catch (err) { console.error(err); setError(err.message); toast.error('Erreur: ' + err.message) }
     finally { setLoading(false) }
   }, [])
 
   useEffect(() => { fetch() }, [fetch])
 
-  /* ──── Rafraîchir au retour de la page Ventes ──── */
+  /* ──── Helper: update 1 item dans le state local en recalculant ──── */
+  const updateItem = (id, overrides) => {
+    setItems(prev => prev.map(i => i.id === id ? recalcItem({ ...i, ...overrides }) : i))
+  }
+
   useEffect(() => {
     const handleRouteChange = () => { fetch() }
     router.events?.on('routeChangeComplete', handleRouteChange)
@@ -145,6 +144,7 @@ export default function StockPage() {
     coutTotal: items.reduce((s, i) => s + Number(i.cout_total_lot ?? 0), 0),
   }), [items])
 
+  /* ──── CRUD ──── */
   const addItem = async (fd) => {
     const cleaned = stripComputed(fd)
     const { error } = await supabase.from('revente_stock').insert([cleaned])
@@ -158,6 +158,8 @@ export default function StockPage() {
     const { error } = await supabase.from('revente_stock').update(cleaned).eq('id', edit.id)
     if (error) throw error
     toast.success('Article modifié')
+    // Mise à jour locale immédiate AVANT le re-fetch
+    updateItem(edit.id, cleaned)
     await fetch()
   }
 
@@ -168,48 +170,38 @@ export default function StockPage() {
     setDel(null); await fetch()
   }
 
-  /* ──── Sauvegarde inline marketplace ──── */
+  /* ──── Sauvegarde inline ──── */
   const savePlateforme = async (id) => {
     const val = editVal.trim()
     if (!val) { setEditingId(null); return }
     const { error } = await supabase.from('revente_stock').update({ plateforme_conseillee: val }).eq('id', id)
     if (error) { toast.error('Erreur'); return }
-    toast.success(`Marketplace: ${val}`)
-    setItems(prev => prev.map(i => i.id === id ? { ...i, plateforme_conseillee: val } : i))
+    updateItem(id, { plateforme_conseillee: val })
     setEditingId(null)
   }
 
   const startEdit = (item) => {
     setEditingId(item.id); setEditVal(item.plateforme_conseillee || '')
-    setTimeout(() => {
-      const el = document.getElementById(`plat-input-${item.id}`)
-      if (el) { el.focus(); el.select() }
-    }, 50)
+    setTimeout(() => { document.getElementById(`plat-input-${item.id}`)?.focus() }, 50)
   }
 
   const cancelEdit = () => { setEditingId(null); setEditVal('') }
 
-  /* ──── Sauvegarde inline date réception ──── */
   const saveDate = async (id) => {
     const val = dateEditVal || null
     const { error } = await supabase.from('revente_stock').update({ date_reception: val }).eq('id', id)
     if (error) { toast.error('Erreur'); return }
-    toast.success('Date mise à jour')
+    updateItem(id, { date_reception: val })
     setDateEditingId(null)
-    setItems(prev => prev.map(i => i.id === id ? { ...i, date_reception: val } : i))
   }
 
   const startDateEdit = (item) => {
     setDateEditingId(item.id); setDateEditVal(item.date_reception || '')
-    setTimeout(() => {
-      const el = document.getElementById(`date-input-${item.id}`)
-      if (el) { el.focus(); el.select() }
-    }, 50)
+    setTimeout(() => { document.getElementById(`date-input-${item.id}`)?.focus() }, 50)
   }
 
   const cancelDateEdit = () => { setDateEditingId(null); setDateEditVal('') }
 
-  /* ──── Sauvegarde inline total_recu ──── */
   const saveTotalRecu = async (id) => {
     const raw = recuEditVal.trim()
     const val = raw === '' || raw === '-' ? null : parseInt(raw, 10)
@@ -219,22 +211,17 @@ export default function StockPage() {
     }
     const { error } = await supabase.from('revente_stock').update({ total_recu: val }).eq('id', id)
     if (error) { toast.error("Erreur lors de l'enregistrement"); return }
-    toast.success(val !== null ? `Total reçu: ${val}` : 'Total reçu effacé')
+    updateItem(id, {
+      total_recu: val,
+      ecart_reception: val !== null ? val - Number(items.find(i => i.id === id)?.qte_stock ?? 0) : null,
+    })
     setRecuEditingId(null)
-    setItems(prev => prev.map(i =>
-      i.id === id
-        ? { ...i, total_recu: val, ecart_reception: val !== null ? val - Number(i.qte_stock) : null }
-        : i
-    ))
   }
 
   const startRecuEdit = (item) => {
     setRecuEditingId(item.id)
     setRecuEditVal(item.total_recu !== null && item.total_recu !== undefined ? String(item.total_recu) : '')
-    setTimeout(() => {
-      const el = document.getElementById(`recu-input-${item.id}`)
-      if (el) { el.focus(); el.select() }
-    }, 50)
+    setTimeout(() => { document.getElementById(`recu-input-${item.id}`)?.focus() }, 50)
   }
 
   const cancelRecuEdit = () => { setRecuEditingId(null); setRecuEditVal('') }
@@ -299,54 +286,35 @@ export default function StockPage() {
                 </button>
                 <button id="btn-recalcul" onClick={async () => {
                   const majPrix = [
-                    // Lot 279: 25 maillots — adj 11€ → total 16.97€/25 = 0.68€/u
                     {nom:'25 maillots', pu:0.68, qte:25, cat:'Mode'},
-                    // Lot 138: 90 bas maillots — adj 20€ → total 30.86€/90 = 0.34€/u
                     {nom:'90 bas de maillots', pu:0.34, qte:90, cat:'Mode'},
-                    // Lot 172: 25 bracelets Œil de Tigre — adj 17€ → total 26.23€/25 = 1.05€/u
                     {nom:'bracelets', pu:1.05, qte:25, cat:'Bijoux'},
-                    // Lot 123: 20 hauts Esprit — adj 20€ → total 30.86€/20 = 1.54€/u
                     {nom:'20 hauts', pu:1.54, qte:20, cat:'Mode'},
-                    // Lot 343: DXR TANNER S — adj 41€ → total 63.26€/1
                     {nom:'DXR TANNER', pu:63.26, qte:1, cat:'Moto'},
-                    // Lot 345: DXR ADAN S — adj 36€ → total 55.55€/1
                     {nom:'DXR ADAN', pu:55.55, qte:1, cat:'Moto'},
-                    // Lot 118: 35 hauts maillots Esprit — adj 20€ → total 30.86€/35 = 0.88€/u
                     {nom:'35 hauts de maillots', pu:0.88, qte:35, cat:'Mode'},
-                    // Lot 117: 26 bas maillots Esprit — adj 20€ → total 30.86€/26 = 1.19€/u
                     {nom:'26 bas de maillots', pu:1.19, qte:26, cat:'Mode'},
-                    // Lot 137: 50 hauts maillots — adj 20€ → total 30.86€/50 = 0.62€/u
                     {nom:'50 hauts de maillots', pu:0.62, qte:50, cat:'Mode'},
-                    // Lot 286: 40 colliers — adj 20€ → total 30.86€/40 = 0.77€/u
                     {nom:'colliers', pu:0.77, qte:40, cat:'Bijoux'},
-                    // Lot 278: 10 pyjamas Lulu Castagnette — adj 15€ → total 23.15€/10 = 2.31€/u
                     {nom:'pyjamas', pu:2.31, qte:10, cat:'Mode'},
-                    // Lot 348: DXR TANNER S (bis) — adj 41€ → total 63.26€/1
                     {nom:'DXR Tanner', pu:63.26, qte:1, cat:'Moto'},
-                    // Lot 340: Richa DAYTONA 2 — adj 46€ → total 70.98€/1
                     {nom:'Richa', pu:70.98, qte:1, cat:'Moto'},
-                    // Lot 341: DXR ROADTRIP WOMAN 34 — adj 22€ → total 33.95€/1
                     {nom:'ROADTRIP WOMAN', pu:33.95, qte:1, cat:'Moto'},
-                    // Lot 136: 18 rideaux — adj 21€ → total 32.40€/18 = 1.80€/u
                     {nom:'rideaux', pu:1.80, qte:18, cat:'Autre'},
-                    // Lot 124: 14 jupes Esprit — adj 20€ → total 30.86€/14 = 2.20€/u
                     {nom:'jupes', pu:2.20, qte:14, cat:'Mode'},
-                    // Lot 349: Pharao Cedar Waterproof M — adj 39€ → total 60.18€/1
                     {nom:'Pharao', pu:60.18, qte:1, cat:'Moto'},
-                    // Lot extra: 31 bas maillots restants — adj inclus dans le 90
                     {nom:'31 bas maillots', pu:0.34, qte:31, cat:'Mode'},
-                    // Lot extra: 85 bikinis 2 pièces
                     {nom:'85 bikinis', pu:1.16, qte:85, cat:'Mode'},
                   ]
                   let ok = 0, fails = []
                   for (const m of majPrix) {
-                    const item = items.find(i => i.produit.toLowerCase().includes(m.nom) || i.produit.toLowerCase().includes(m.nom.replace(/^\d+\s/,'')))
+                    const item = items.find(i => i.produit.toLowerCase().includes(m.nom))
                     if (!item) { fails.push(m.nom); continue }
                     const {error} = await supabase.from('revente_stock').update({
                       prix_achat_unitaire: m.pu, qte_stock: m.qte, categorie: m.cat
                     }).eq('id', item.id)
                     if (error) fails.push(m.nom + ' ' + error.message)
-                    else ok++
+                    else { updateItem(item.id, { prix_achat_unitaire: m.pu, qte_stock: m.qte, categorie: m.cat }); ok++ }
                   }
                   alert(ok + ' articles mis à jour' + (fails.length ? '\nÉchecs: ' + fails.join(', ') : ''))
                   await fetch()
@@ -403,7 +371,7 @@ export default function StockPage() {
                         <AnimatePresence mode="popLayout">
                           {filtered.map((item, idx) => {
                             const isLow = item.qte_restante <= LOW
-                            const coutLot = item.cout_total_lot ?? (Number(item.prix_achat_unitaire) * Number(item.qte_stock))
+                            const coutLot = item.cout_total_lot
                             const profit = Number(item.profit_potentiel ?? 0)
                             const isProfitPos = profit >= 0
                             const isEditing = editingId === item.id
@@ -475,7 +443,7 @@ export default function StockPage() {
                                     </button>
                                   )}
                                 </td>
-                                {/* En stock depuis — avec fallback created_at */}
+                                {/* En stock depuis */}
                                 <td className="px-3 py-3 text-center"><JoursBadge jours={item.jours_en_stock} created_at={item.created_at} /></td>
                                 <td className="px-3 py-3 text-right font-mono text-ink-400 whitespace-nowrap">{CFMT(item.prix_achat_unitaire)}</td>
                                 <td className="px-3 py-3 text-right font-mono font-semibold text-ink-50 whitespace-nowrap">{CFMT(coutLot)}</td>
@@ -540,7 +508,7 @@ export default function StockPage() {
                     <AnimatePresence mode="popLayout">
                       {filtered.map(item => {
                         const isLow = item.qte_restante <= LOW
-                        const coutLot = item.cout_total_lot ?? (Number(item.prix_achat_unitaire) * Number(item.qte_stock))
+                        const coutLot = item.cout_total_lot
                         const profit = Number(item.profit_potentiel ?? 0)
                         const isProfitPos = profit >= 0
                         const ecart = item.ecart_reception !== null && item.ecart_reception !== undefined ? Number(item.ecart_reception) : null
@@ -579,7 +547,6 @@ export default function StockPage() {
                         )
                       })}
                     </AnimatePresence>
-                    {/* Totaux mobile */}
                     <div className="card-dash p-4 border border-accent/20">
                       <div className="flex justify-between items-center mb-2"><span className="text-xs text-ink-400 font-sans font-medium uppercase tracking-wider">Totaux</span></div>
                       <div className="grid grid-cols-3 gap-2 text-xs">
@@ -597,7 +564,6 @@ export default function StockPage() {
 
         <StockModal isOpen={modal} onClose={() => { setModal(false); setEdit(null) }} onSave={edit ? editItem : addItem} item={edit} />
 
-        {/* Delete confirmation */}
         <AnimatePresence>
           {del && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
