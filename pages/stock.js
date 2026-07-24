@@ -279,17 +279,41 @@ export default function StockPage() {
                 <MagneticButton as="button" onClick={() => { setEdit(null); setModal(true) }} className="btn-primary shrink-0 gap-2">
                   <Plus className="w-4 h-4" /> Ajouter
                 </MagneticButton>
-                <button
-                  onClick={() => {
-                    const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' })
-                    const url = URL.createObjectURL(blob)
-                    const a = document.createElement('a')
-                    a.href = url; a.download = 'registre_stock.json'
-                    a.click(); URL.revokeObjectURL(url)
-                  }}
-                  className="bg-base-800 text-ink-400 hover:text-ink-50 hover:bg-base-700 px-4 py-2.5 rounded-lg text-sm font-medium transition-all shrink-0 inline-flex items-center gap-2"
-                >
+                <button onClick={() => {
+                  const blob = new Blob([JSON.stringify(items, null, 2)], {type:'application/json'})
+                  const url = URL.createObjectURL(blob); const a = document.createElement('a')
+                  a.href = url; a.download = 'registre_stock.json'; a.click(); URL.revokeObjectURL(url)
+                }} className="bg-base-800 text-ink-400 hover:text-ink-50 hover:bg-base-700 px-4 py-2.5 rounded-lg text-sm font-medium transition-all shrink-0 inline-flex items-center gap-2">
                   <Download className="w-4 h-4" /> Export
+                </button>
+                <button id="btn-recalcul" onClick={async () => {
+                  const majPrix = [
+                    {nom:'25 maillots', pu:0.68, qte:25, cat:'Mode'},
+                    {nom:'90 bas de maillots', pu:0.34, qte:90, cat:'Mode'},
+                    {nom:'bracelets', pu:1.05, qte:25, cat:'Bijoux'},
+                    {nom:'20 hauts', pu:1.54, qte:20, cat:'Mode'},
+                    {nom:'35 hauts de maillots', pu:0.88, qte:35, cat:'Mode'},
+                    {nom:'26 bas de maillots', pu:1.19, qte:26, cat:'Mode'},
+                    {nom:'50 hauts de maillots', pu:0.62, qte:50, cat:'Mode'},
+                    {nom:'colliers', pu:0.77, qte:40, cat:'Bijoux'},
+                    {nom:'pyjamas', pu:2.31, qte:10, cat:'Mode'},
+                    {nom:'rideaux', pu:1.80, qte:18, cat:'Autre'},
+                    {nom:'jupes', pu:2.20, qte:14, cat:'Mode'},
+                  ]
+                  let ok = 0, fails = []
+                  for (const m of majPrix) {
+                    const item = items.find(i => i.produit.toLowerCase().includes(m.nom))
+                    if (!item) { fails.push(m.nom); continue }
+                    const {error} = await supabase.from('revente_stock').update({
+                      prix_achat_unitaire: m.pu, qte_stock: m.qte, categorie: m.cat
+                    }).eq('id', item.id)
+                    if (error) fails.push(m.nom + ' ' + error.message)
+                    else ok++
+                  }
+                  alert(ok + ' articles mis à jour' + (fails.length ? ' Échecs: ' + fails.join(', ') : ''))
+                  window.location.reload()
+                }} className="bg-danger/10 text-danger hover:bg-danger/20 px-4 py-2.5 rounded-lg text-sm font-medium transition-all shrink-0 inline-flex items-center gap-2">
+                  Recalculer coûts réels
                 </button>
               </div>
 
