@@ -288,21 +288,48 @@ export default function StockPage() {
                 </button>
                 <button id="btn-recalcul" onClick={async () => {
                   const majPrix = [
+                    // Lot 279: 25 maillots — adj 11€ → total 16.97€/25 = 0.68€/u
                     {nom:'25 maillots', pu:0.68, qte:25, cat:'Mode'},
+                    // Lot 138: 90 bas maillots — adj 20€ → total 30.86€/90 = 0.34€/u
                     {nom:'90 bas de maillots', pu:0.34, qte:90, cat:'Mode'},
+                    // Lot 172: 25 bracelets Œil de Tigre — adj 17€ → total 26.23€/25 = 1.05€/u
                     {nom:'bracelets', pu:1.05, qte:25, cat:'Bijoux'},
+                    // Lot 123: 20 hauts Esprit — adj 20€ → total 30.86€/20 = 1.54€/u
                     {nom:'20 hauts', pu:1.54, qte:20, cat:'Mode'},
+                    // Lot 343: DXR TANNER S — adj 41€ → total 63.26€/1
+                    {nom:'DXR TANNER', pu:63.26, qte:1, cat:'Moto'},
+                    // Lot 345: DXR ADAN S — adj 36€ → total 55.55€/1
+                    {nom:'DXR ADAN', pu:55.55, qte:1, cat:'Moto'},
+                    // Lot 118: 35 hauts maillots Esprit — adj 20€ → total 30.86€/35 = 0.88€/u
                     {nom:'35 hauts de maillots', pu:0.88, qte:35, cat:'Mode'},
+                    // Lot 117: 26 bas maillots Esprit — adj 20€ → total 30.86€/26 = 1.19€/u
                     {nom:'26 bas de maillots', pu:1.19, qte:26, cat:'Mode'},
+                    // Lot 137: 50 hauts maillots — adj 20€ → total 30.86€/50 = 0.62€/u
                     {nom:'50 hauts de maillots', pu:0.62, qte:50, cat:'Mode'},
+                    // Lot 286: 40 colliers — adj 20€ → total 30.86€/40 = 0.77€/u
                     {nom:'colliers', pu:0.77, qte:40, cat:'Bijoux'},
+                    // Lot 278: 10 pyjamas Lulu Castagnette — adj 15€ → total 23.15€/10 = 2.31€/u
                     {nom:'pyjamas', pu:2.31, qte:10, cat:'Mode'},
+                    // Lot 348: DXR TANNER S (bis) — adj 41€ → total 63.26€/1
+                    {nom:'DXR Tanner', pu:63.26, qte:1, cat:'Moto'},
+                    // Lot 340: Richa DAYTONA 2 — adj 46€ → total 70.98€/1
+                    {nom:'Richa', pu:70.98, qte:1, cat:'Moto'},
+                    // Lot 341: DXR ROADTRIP WOMAN 34 — adj 22€ → total 33.95€/1
+                    {nom:'ROADTRIP WOMAN', pu:33.95, qte:1, cat:'Moto'},
+                    // Lot 136: 18 rideaux — adj 21€ → total 32.40€/18 = 1.80€/u
                     {nom:'rideaux', pu:1.80, qte:18, cat:'Autre'},
+                    // Lot 124: 14 jupes Esprit — adj 20€ → total 30.86€/14 = 2.20€/u
                     {nom:'jupes', pu:2.20, qte:14, cat:'Mode'},
+                    // Lot 349: Pharao Cedar Waterproof M — adj 39€ → total 60.18€/1
+                    {nom:'Pharao', pu:60.18, qte:1, cat:'Moto'},
+                    // Lot extra: 31 bas maillots restants — adj inclus dans le 90
+                    {nom:'31 bas maillots', pu:0.34, qte:31, cat:'Mode'},
+                    // Lot extra: 85 bikinis 2 pièces
+                    {nom:'85 bikinis', pu:1.16, qte:85, cat:'Mode'},
                   ]
                   let ok = 0, fails = []
                   for (const m of majPrix) {
-                    const item = items.find(i => i.produit.toLowerCase().includes(m.nom))
+                    const item = items.find(i => i.produit.toLowerCase().includes(m.nom) || i.produit.toLowerCase().includes(m.nom.replace(/^\d+\s/,'')))
                     if (!item) { fails.push(m.nom); continue }
                     const {error} = await supabase.from('revente_stock').update({
                       prix_achat_unitaire: m.pu, qte_stock: m.qte, categorie: m.cat
@@ -310,7 +337,7 @@ export default function StockPage() {
                     if (error) fails.push(m.nom + ' ' + error.message)
                     else ok++
                   }
-                  alert(ok + ' articles mis à jour' + (fails.length ? ' Échecs: ' + fails.join(', ') : ''))
+                  alert(ok + ' articles mis à jour' + (fails.length ? '\nÉchecs: ' + fails.join(', ') : ''))
                   window.location.reload()
                 }} className="bg-danger/10 text-danger hover:bg-danger/20 px-4 py-2.5 rounded-lg text-sm font-medium transition-all shrink-0 inline-flex items-center gap-2">
                   Recalculer coûts réels
