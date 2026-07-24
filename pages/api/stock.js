@@ -1,70 +1,29 @@
 import { createClient } from '@supabase/supabase-js'
 
 export default async function handler(req, res) {
-  // Essayer d'extraire le token depuis le cookie Supabase
-  const cookies = req.headers.cookie || ''
+  // Essai 1: cookie complet
+  const allCookies = req.headers.cookie || ''
 
-  // Essaie de trouver un cookie Supabase auth (format: sb-<url>-auth-token)
-  const sbCookie = cookies
-    .split(';')
-    .find(c => c.trim().startsWith('sb-'))
+  // Essai 2: Authorization header
+  const authHeader = req.headers.authorization || ''
 
-  let user = null
-  let token = null
+  // Essai 3: URL hash
+  const hash = req.query.hash || ''
 
-  if (sbCookie) {
-    try {
-      const val = sbCookie.split('=')[1]
-      const parsed = JSON.parse(decodeURIComponent(val))
-      token = parsed.access_token
-    } catch (e) {}
-  }
+  // Debug: afficher tous les cookies bruts
+  const cookieList = allCookies.split(';').map(c => c.trim()).filter(Boolean)
+  const rawCookies = cookieList.map(c => c.substring(0, 80))
 
-  // Créer un client avec le token si dispo
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  // Chercher tous les cookies qui mentionnent "supabase" ou "sb-"
+  const sbCookies = cookieList.filter(c => c.startsWith('sb-') || c.includes('supabase'))
 
-  if (token) {
-    const supabase = createClient(supabaseUrl, supabaseKey, {
-      global: { headers: { Authorization: `Bearer ${token}` } },
-      auth: { persistSession: false },
-    })
-    const { data: { user: u } } = await supabase.auth.getUser()
-    user = u
-  }
-
-  if (!user) {
-    // Sans token, on ne peut pas lire les données à cause du RLS
-    return res.status(401).json({
-      error: 'Non connecté — ouvre cette URL dans un nouvel onglet après t\'être connecté sur le site',
-      cookies: Object.fromEntries(
-        cookies.split(';').filter(c => c.trim().startsWith('sb-')).map(c => {
-          const [k, ...v] = c.trim().split('=')
-          return [k, v.join('=').substring(0, 50)]
-        })
-      )
-    })
-  }
-
-  const supabase = createClient(supabaseUrl, supabaseKey, {
-    global: { headers: { Authorization: `Bearer ${token}` } },
-    auth: { persistSession: false },
+  res.status(200).json({
+    debug: {
+      nbCookies: cookieList.length,
+      sbCookies: sbCookies.length,
+      cookies: rawCookies.slice(0, 20),
+      authHeader: authHeader.substring(0, 30) || '(absent)',
+      hash: hash.substring(0, 30) || '(absent)',
+    }
   })
-
-  const { data: stock, error: stockErr } = await supabase
-    .from('revente_stock')
-    .select('*')
-    .order('created_at', { ascending: false })
-
-  if (stockErr) {
-    return res.status(500).json({ error: stockErr.message })
-  }
-
-  const { data: ventes } = await supabase
-    .from('revente_ventes')
-    .select('*')
-    .order('date_vente', { ascending: false })
-    .limit(500)
-
-  res.status(200).json({ user: user.email, stock, ventes: ventes || [] })
 }
