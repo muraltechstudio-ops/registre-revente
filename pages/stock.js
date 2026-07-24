@@ -338,7 +338,7 @@ export default function StockPage() {
                     else ok++
                   }
                   alert(ok + ' articles mis à jour' + (fails.length ? '\nÉchecs: ' + fails.join(', ') : ''))
-                  window.location.reload()
+                  await fetch()
                 }} className="bg-danger/10 text-danger hover:bg-danger/20 px-4 py-2.5 rounded-lg text-sm font-medium transition-all shrink-0 inline-flex items-center gap-2">
                   Recalculer coûts réels
                 </button>
