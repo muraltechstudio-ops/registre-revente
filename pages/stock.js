@@ -481,11 +481,11 @@ export default function StockPage() {
                                     </button>
                                   )}
                                 </td>
-                                <td className="px-3 py-3 text-center">
-                                  <div className="flex items-center justify-center gap-0.5">
-                                    <button onClick={() => router.push(`/ventes?produit=${item.id}`)} className="p-1.5 rounded-lg text-ink-400 hover:text-accent hover:bg-base-800 transition-all" title="Vendre"><ShoppingCart className="w-3.5 h-3.5" /></button>
-                                    <button onClick={() => { setEdit(item); setModal(true) }} className="p-1.5 rounded-lg text-ink-400 hover:text-accent hover:bg-base-800 transition-all" title="Modifier"><Pencil className="w-3.5 h-3.5" /></button>
-                                    <button onClick={() => setDel(item)} className="p-1.5 rounded-lg text-ink-400 hover:text-danger hover:bg-base-800 transition-all" title="Supprimer"><Trash2 className="w-3.5 h-3.5" /></button>
+                                <td className="px-3 py-3 text-center whitespace-nowrap">
+                                  <div className="flex items-center justify-center gap-1">
+                                    <button onClick={() => router.push(`/ventes?produit=${item.id}`)} className="px-2 py-1.5 rounded-lg text-xs font-medium text-accent bg-accent/10 hover:bg-accent/20 transition-all" title="Vendre">Vendre</button>
+                                    <button onClick={() => { setEdit(item); setModal(true) }} className="p-1.5 rounded-lg text-ink-400 hover:text-ink-50 hover:bg-base-800 transition-all" title="Modifier article"><Pencil className="w-4 h-4" /></button>
+                                    <button onClick={() => setDel(item)} className="p-1.5 rounded-lg text-ink-400 hover:text-danger hover:bg-base-800 transition-all" title="Supprimer"><Trash2 className="w-4 h-4" /></button>
                                   </div>
                                 </td>
                               </motion.tr>
