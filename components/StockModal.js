@@ -89,8 +89,7 @@ export default function StockModal({ isOpen, onClose, onSave, item }) {
       onClose()
     } catch (err) {
       console.error('StockModal error:', err)
-      toast.error(err?.message || "Erreur lors de l'enregistrement")
-    }
+      toast.error('MODAL_ERR: ' + (err?.message || String(err) || 'Erreur'))
     finally { setLoading(false) }
   }
 
