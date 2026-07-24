@@ -8,7 +8,7 @@ import StockModal from '../components/StockModal'
 import CountUp from '../components/CountUp'
 import MagneticButton from '../components/MagneticButton'
 import toast from 'react-hot-toast'
-import { Package, Plus, Search, ShoppingCart, Pencil, Trash2, AlertTriangle, Box, Check, X, CalendarDays } from 'lucide-react'
+import { Package, Plus, Search, ShoppingCart, Pencil, Trash2, AlertTriangle, Box, Check, X, CalendarDays, Download } from 'lucide-react'
 
 const CATS = ['Informatique','Mode','Bijoux','Moto','Papeterie/Bureau','Hygiène/Beauté','Stock existant','Autre']
 const SUGGESTIONS_MARCHE = ['Vinted', 'Leboncoin', 'Leboncoin Pro', 'Vinted Pro', 'Facebook Marketplace', 'TikTok Shop', 'Vestiaire Collective', 'Joli Closet', 'Whatnot']
@@ -279,6 +279,18 @@ export default function StockPage() {
                 <MagneticButton as="button" onClick={() => { setEdit(null); setModal(true) }} className="btn-primary shrink-0 gap-2">
                   <Plus className="w-4 h-4" /> Ajouter
                 </MagneticButton>
+                <button
+                  onClick={() => {
+                    const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' })
+                    const url = URL.createObjectURL(blob)
+                    const a = document.createElement('a')
+                    a.href = url; a.download = 'registre_stock.json'
+                    a.click(); URL.revokeObjectURL(url)
+                  }}
+                  className="bg-base-800 text-ink-400 hover:text-ink-50 hover:bg-base-700 px-4 py-2.5 rounded-lg text-sm font-medium transition-all shrink-0 inline-flex items-center gap-2"
+                >
+                  <Download className="w-4 h-4" /> Export
+                </button>
               </div>
 
               {/* Chips + filtres */}
