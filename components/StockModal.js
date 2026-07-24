@@ -87,7 +87,10 @@ export default function StockModal({ isOpen, onClose, onSave, item }) {
       const payload = { ...buildPayload(), photo_url: url }
       await onSave(payload)
       onClose()
-    } catch (err) { toast.error("Erreur") }
+    } catch (err) {
+      console.error('StockModal error:', err)
+      toast.error(err?.message || "Erreur lors de l'enregistrement")
+    }
     finally { setLoading(false) }
   }
 
