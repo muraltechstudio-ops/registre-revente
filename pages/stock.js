@@ -26,19 +26,23 @@ const stripComputed = (obj) => {
   return clean
 }
 
-/* ──── Recalcul de toutes les colonnes dérivées ──── */
+/* ──── Recalcul FORCÉ de toutes les colonnes dérivées
+ *  IMPORTANT : on recalcule TOUT depuis les champs bruts (prix_achat_unitaire,
+ *  prix_revente_unitaire, qte_stock, qte_vendue). Les valeurs provenant de la
+ *  vue (cout_total_lot, qte_restante, valeur_stock_restant, profit_potentiel)
+ *  sont IGNORÉES car elles peuvent être décalées après une modification. */
 const recalcItem = (i) => {
   const pu = Number(i.prix_achat_unitaire)
   const pv = Number(i.prix_revente_unitaire)
   const qte = Number(i.qte_stock ?? 0)
   const qteV = Number(i.qte_vendue ?? 0)
-  const qteR = qte - qteV
+  const qteR = Math.max(qte - qteV, 0)
   return {
     ...i,
-    cout_total_lot: Number(i.cout_total_lot) || (pu * qte),
-    qte_restante: Number(i.qte_restante) || Math.max(qteR, 0),
-    valeur_stock_restant: Number(i.valeur_stock_restant) || (Math.max(qteR, 0) * pv),
-    profit_potentiel: Number(i.profit_potentiel) || ((pv - pu) * Math.max(qteR, 0)),
+    cout_total_lot: pu * qte,
+    qte_restante: qteR,
+    valeur_stock_restant: qteR * pv,
+    profit_potentiel: (pv - pu) * qteR,
   }
 }
 
