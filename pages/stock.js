@@ -211,11 +211,19 @@ export default function StockPage() {
       toast.error('Veuillez entrer un nombre valide')
       return
     }
-    const { error } = await supabase.from('revente_stock').update({ total_recu: val }).eq('id', id)
+    const item = items.find(i => i.id === id)
+    if (!item) return
+    const ecart = val !== null ? val - Number(item.qte_stock ?? 0) : null
+    const { error } = await supabase.from('revente_stock').update({
+      total_recu: val,
+      qte_stock: val !== null ? val : item.qte_stock,
+    }).eq('id', id)
     if (error) { toast.error("Erreur lors de l'enregistrement"); return }
+    // Mise à jour locale : le stock devient égal au total reçu
     updateItem(id, {
       total_recu: val,
-      ecart_reception: val !== null ? val - Number(items.find(i => i.id === id)?.qte_stock ?? 0) : null,
+      qte_stock: val !== null ? val : item.qte_stock,
+      ecart_reception: ecart,
     })
     setRecuEditingId(null)
   }
