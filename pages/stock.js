@@ -91,11 +91,22 @@ export default function StockPage() {
       if (r.error) throw new Error(r.error.message)
       let photos = []
       try { const p = await supabase.from('revente_stock').select('id, photo_url'); if (!p.error) photos = p.data ?? [] } catch {}
-      setItems((r.data ?? []).map(i => ({
-        ...i,
-        photo_url: photos.find(p => p.id === i.id)?.photo_url ?? null,
-        cout_total_lot: i.cout_total_lot ?? (Number(i.prix_achat_unitaire) * Number(i.qte_stock)),
-      })))
+      setItems((r.data ?? []).map(i => {
+        // Recalcul forcé côté client pour ne pas dépendre de la vue
+        const pu = Number(i.prix_achat_unitaire)
+        const qte = Number(i.qte_stock)
+        const pv = Number(i.prix_revente_unitaire)
+        const qteV = Number(i.qte_vendue ?? 0)
+        const qteR = qte - qteV
+        return {
+          ...i,
+          photo_url: photos.find(p => p.id === i.id)?.photo_url ?? null,
+          cout_total_lot: Number(i.cout_total_lot) || (pu * qte),
+          qte_restante: Number(i.qte_restante) || qteR,
+          valeur_stock_restant: Number(i.valeur_stock_restant) || (qteR * pv),
+          profit_potentiel: Number(i.profit_potentiel) || ((pv - pu) * qteR),
+        }
+      }))
     } catch (err) { console.error(err); setError(err.message); toast.error('Erreur: ' + err.message) }
     finally { setLoading(false) }
   }, [])
