@@ -158,9 +158,7 @@ export default function StockPage() {
     const { error } = await supabase.from('revente_stock').update(cleaned).eq('id', edit.id)
     if (error) throw error
     toast.success('Article modifié')
-    // Mise à jour locale immédiate AVANT le re-fetch
     updateItem(edit.id, cleaned)
-    await fetch()
   }
 
   const removeItem = async (id) => {
