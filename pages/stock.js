@@ -220,7 +220,7 @@ export default function StockPage() {
       qte_stock: val !== null ? val : item.qte_stock,
     }).eq('id', id)
     if (error) { toast.error("Erreur lors de l'enregistrement"); return }
-    // Mise à jour locale : le stock devient égal au total reçu
+    // Mise à jour locale : le stock devient égal au total reçu + recalcul complet
     updateItem(id, {
       total_recu: val,
       qte_stock: val !== null ? val : item.qte_stock,
@@ -320,7 +320,7 @@ export default function StockPage() {
                   let ok = 0, fails = []
                   const used = new Set()
                   for (const m of majPrix) {
-                    const item = items.find(i => !used.has(i.id) && i.produit.toLowerCase().includes(m.nom))
+                    const item = items.find(i => !used.has(i.id) && i.produit.toLowerCase().includes(m.nom.toLowerCase()))
                     if (!item) { fails.push(m.nom); continue }
                     used.add(item.id)
                     const {error} = await supabase.from('revente_stock').update({
