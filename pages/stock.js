@@ -17,7 +17,7 @@ const LOW = 3
 
 const STOCK_EDITABLE = [
   'produit', 'categorie', 'prix_achat_unitaire', 'qte_stock', 'prix_revente_unitaire',
-  'plateforme_conseillee', 'date_reception', 'total_recu', 'photo_url', 'prix_neuf_conseil',
+  'plateforme_conseillee', 'date_reception', 'total_recu', 'photo_url', 'prix_neuf_conseil', 'qte_initiale',
 ]
 
 const stripComputed = (obj) => {
@@ -34,12 +34,13 @@ const stripComputed = (obj) => {
 const recalcItem = (i) => {
   const pu = Number(i.prix_achat_unitaire)
   const pv = Number(i.prix_revente_unitaire)
+  const qteInit = Number(i.qte_initiale ?? i.qte_stock ?? 0)
   const qte = Number(i.qte_stock ?? 0)
   const qteV = Number(i.qte_vendue ?? 0)
   const qteR = Math.max(qte - qteV, 0)
   return {
     ...i,
-    cout_total_lot: pu * qte,
+    cout_total_lot: pu * qteInit,
     qte_restante: qteR,
     valeur_stock_restant: qteR * pv,
     profit_potentiel: (pv - pu) * qteR,
@@ -152,6 +153,7 @@ export default function StockPage() {
   /* ──── CRUD ──── */
   const addItem = async (fd) => {
     const cleaned = stripComputed(fd)
+    cleaned.qte_initiale = cleaned.qte_stock
     const { error } = await supabase.from('revente_stock').insert([cleaned])
     if (error) throw error
     toast.success('Article ajouté')
@@ -214,6 +216,7 @@ export default function StockPage() {
     }
     const { error } = await supabase.from('revente_stock').update({
       total_recu: val,
+      qte_stock: val,
     }).eq('id', id)
     if (error) { toast.error("Erreur lors de l'enregistrement"); return }
     setRecuEditingId(null)

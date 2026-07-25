@@ -101,11 +101,12 @@ select
   s.total_recu,
   s.photo_url,
   s.prix_neuf_conseil,
-  s.cout_total_lot
+  s.cout_total_lot,
+  s.qte_initiale
 from revente_stock s
 left join revente_ventes v on v.stock_id = s.id
 group by s.id, s.user_id, s.produit, s.categorie, s.prix_achat_unitaire, s.qte_stock, s.prix_revente_unitaire,
-  s.plateforme_conseillee, s.date_reception, s.total_recu, s.photo_url, s.prix_neuf_conseil, s.cout_total_lot;
+  s.plateforme_conseillee, s.date_reception, s.total_recu, s.photo_url, s.prix_neuf_conseil, s.cout_total_lot, s.qte_initiale;
 
 -- 5. Row Level Security -------------------------------------------------------
 
