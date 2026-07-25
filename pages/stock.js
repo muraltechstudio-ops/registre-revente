@@ -212,12 +212,8 @@ export default function StockPage() {
       toast.error('Veuillez entrer un nombre valide')
       return
     }
-    const item = items.find(i => i.id === id)
-    if (!item) return
-    const ecart = val !== null ? val - Number(item.qte_stock ?? 0) : null
     const { error } = await supabase.from('revente_stock').update({
       total_recu: val,
-      qte_stock: val !== null ? val : item.qte_stock,
     }).eq('id', id)
     if (error) { toast.error("Erreur lors de l'enregistrement"); return }
     setRecuEditingId(null)
