@@ -220,13 +220,8 @@ export default function StockPage() {
       qte_stock: val !== null ? val : item.qte_stock,
     }).eq('id', id)
     if (error) { toast.error("Erreur lors de l'enregistrement"); return }
-    // Mise à jour locale : le stock devient égal au total reçu + recalcul complet
-    updateItem(id, {
-      total_recu: val,
-      qte_stock: val !== null ? val : item.qte_stock,
-      ecart_reception: ecart,
-    })
     setRecuEditingId(null)
+    await fetch()
   }
 
   const startRecuEdit = (item) => {
