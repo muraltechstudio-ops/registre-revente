@@ -299,34 +299,37 @@ export default function StockPage() {
                     {nom:'25 maillots', pu:0.68, qte:25, cat:'Mode'},
                     {nom:'90 bas de maillots', pu:0.34, qte:90, cat:'Mode'},
                     {nom:'bracelets', pu:1.05, qte:25, cat:'Bijoux'},
-                    {nom:'20 hauts', pu:1.54, qte:20, cat:'Mode'},
+                    {nom:'20 hauts Esprit', pu:1.54, qte:20, cat:'Mode'},
                     {nom:'DXR TANNER', pu:63.26, qte:1, cat:'Moto'},
                     {nom:'DXR ADAN', pu:55.55, qte:1, cat:'Moto'},
-                    {nom:'35 hauts de maillots', pu:0.88, qte:35, cat:'Mode'},
-                    {nom:'26 bas de maillots', pu:1.19, qte:26, cat:'Mode'},
+                    {nom:'35 hauts maillots', pu:0.88, qte:35, cat:'Mode'},
+                    {nom:'26 bas maillots', pu:1.19, qte:26, cat:'Mode'},
                     {nom:'50 hauts de maillots', pu:0.62, qte:50, cat:'Mode'},
                     {nom:'colliers', pu:0.77, qte:40, cat:'Bijoux'},
-                    {nom:'pyjamas', pu:2.31, qte:10, cat:'Mode'},
-                    {nom:'DXR Tanner', pu:63.26, qte:1, cat:'Moto'},
-                    {nom:'Richa', pu:70.98, qte:1, cat:'Moto'},
+                    {nom:'pyjamas Lulu', pu:2.31, qte:10, cat:'Mode'},
+                    {nom:'DXR TANNER', pu:63.26, qte:1, cat:'Moto'},
+                    {nom:'Richa DAYTONA', pu:70.98, qte:1, cat:'Moto'},
                     {nom:'ROADTRIP WOMAN', pu:33.95, qte:1, cat:'Moto'},
                     {nom:'rideaux', pu:1.80, qte:18, cat:'Autre'},
-                    {nom:'jupes', pu:2.20, qte:14, cat:'Mode'},
-                    {nom:'Pharao', pu:60.18, qte:1, cat:'Moto'},
+                    {nom:'jupes Esprit', pu:2.20, qte:14, cat:'Mode'},
+                    {nom:'Pharao Cedar', pu:60.18, qte:1, cat:'Moto'},
                     {nom:'31 bas maillots', pu:0.34, qte:31, cat:'Mode'},
                     {nom:'85 bikinis', pu:1.16, qte:85, cat:'Mode'},
                   ]
                   let ok = 0, fails = []
+                  const used = new Set()
                   for (const m of majPrix) {
-                    const item = items.find(i => i.produit.toLowerCase().includes(m.nom))
+                    const item = items.find(i => !used.has(i.id) && i.produit.toLowerCase().includes(m.nom))
                     if (!item) { fails.push(m.nom); continue }
+                    used.add(item.id)
                     const {error} = await supabase.from('revente_stock').update({
                       prix_achat_unitaire: m.pu, qte_stock: m.qte, categorie: m.cat
                     }).eq('id', item.id)
                     if (error) fails.push(m.nom + ' ' + error.message)
                     else { updateItem(item.id, { prix_achat_unitaire: m.pu, qte_stock: m.qte, categorie: m.cat }); ok++ }
                   }
-                  alert(ok + ' articles mis à jour' + (fails.length ? '\nÉchecs: ' + fails.join(', ') : ''))
+                  toast.success(ok + ' articles mis à jour')
+                  if (fails.length) toast.error('Échecs: ' + fails.join(', '))
                   await fetch()
                 }} className="bg-danger/10 text-danger hover:bg-danger/20 px-4 py-2.5 rounded-lg text-sm font-medium transition-all shrink-0 inline-flex items-center gap-2">
                   Recalculer coûts réels
