@@ -8,7 +8,7 @@ const CATS = ['Informatique','Mode','Bijoux','Moto','Papeterie/Bureau','Hygiène
 const SUGGESTIONS_MARCHE = ['Vinted', 'Leboncoin', 'Leboncoin Pro', 'Vinted Pro', 'Facebook Marketplace', 'TikTok Shop', 'Vestiaire Collective', 'Joli Closet', 'Whatnot']
 const EMPTY = {
   produit: '', categorie: 'Autre', prix_achat_unitaire: '', qte_stock: '', prix_revente_unitaire: '',
-  plateforme_conseillee: '', date_reception: '',
+  plateforme_conseillee: '', date_reception: '', prix_neuf_conseil: '',
 }
 const CFMT = (v) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v)
 const todayStr = () => new Date().toISOString().split('T')[0]
@@ -30,6 +30,7 @@ export default function StockModal({ isOpen, onClose, onSave, item }) {
         prix_revente_unitaire: item.prix_revente_unitaire?.toString() ?? '',
         plateforme_conseillee: item.plateforme_conseillee || '',
         date_reception: item.date_reception || '',
+        prix_neuf_conseil: item.prix_neuf_conseil?.toString() ?? '',
       })
       setEp(item.photo_url ?? null)
     } else {
@@ -70,6 +71,7 @@ export default function StockModal({ isOpen, onClose, onSave, item }) {
     plateforme_conseillee: f.plateforme_conseillee || null,
     photo_url: ep,
     date_reception: f.date_reception || null,
+    prix_neuf_conseil: f.prix_neuf_conseil ? parseFloat(f.prix_neuf_conseil) : null,
   })
 
   const submit = async (e) => {
@@ -157,6 +159,22 @@ export default function StockModal({ isOpen, onClose, onSave, item }) {
               <div>
                 <label className="block text-xs font-medium text-ink-400 mb-1">Prix revente unitaire (€)</label>
                 <input type="number" step="0.01" min="0" required value={f.prix_revente_unitaire} onChange={chg('prix_revente_unitaire')} className="input-field w-full font-mono" placeholder="0.00" />
+              </div>
+
+              {/* PNC */}
+              <div>
+                <label className="block text-xs font-medium text-ink-400 mb-1">Prix neuf conseil <span className="text-ink-400/40">(PNC — opt.)</span></label>
+                <div className="relative">
+                  <input type="number" step="0.01" min="0" value={f.prix_neuf_conseil} onChange={chg('prix_neuf_conseil')}
+                    className="input-field w-full font-mono" placeholder="Prix magasin conseillé…" />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-ink-400/30">€</span>
+                </div>
+                {f.prix_neuf_conseil && f.prix_achat_unitaire && (
+                  <p className="text-[11px] text-accent mt-1">
+                    Économie de {CFMT(parseFloat(f.prix_neuf_conseil) - parseFloat(f.prix_achat_unitaire))} ·
+                    {((1 - parseFloat(f.prix_achat_unitaire) / parseFloat(f.prix_neuf_conseil)) * 100).toFixed(0)}% sous le neuf
+                  </p>
+                )}
               </div>
 
               {/* Marketplace */}

@@ -17,7 +17,7 @@ const LOW = 3
 
 const STOCK_EDITABLE = [
   'produit', 'categorie', 'prix_achat_unitaire', 'qte_stock', 'prix_revente_unitaire',
-  'plateforme_conseillee', 'date_reception', 'total_recu', 'photo_url',
+  'plateforme_conseillee', 'date_reception', 'total_recu', 'photo_url', 'prix_neuf_conseil',
 ]
 
 const stripComputed = (obj) => {
@@ -139,6 +139,7 @@ export default function StockPage() {
     qteStock: filtered.reduce((s, i) => s + Number(i.qte_stock ?? 0), 0),
     qteVendue: filtered.reduce((s, i) => s + Number(i.qte_vendue ?? 0), 0),
     qteRestante: filtered.reduce((s, i) => s + Number(i.qte_restante ?? 0), 0),
+    totalPnc: filtered.reduce((s, i) => s + Number(i.prix_neuf_conseil ?? 0), 0),
   }), [filtered])
 
   const metrics = useMemo(() => ({
@@ -373,7 +374,8 @@ export default function StockPage() {
                           <th className="text-right px-3 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium w-[90px]">Coût unitaire</th>
                           <th className="text-right px-3 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium w-[90px]">Coût total lot</th>
                           <th className="text-center px-3 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium w-[85px]">Stock</th>
-                          <th className="text-right px-3 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium w-[80px]">Vente</th>
+                          <th className="text-right px-3 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium w-[90px]">Vente</th>
+                          <th className="text-right px-3 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium w-[80px]">PNC</th>
                           <th className="text-right px-3 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium w-[80px]">Valeur</th>
                           <th className="text-right px-3 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium w-[80px]">Profit</th>
                           <th className="text-center px-3 py-3 text-xs uppercase tracking-[0.1em] text-ink-400 font-sans font-medium w-[100px]">Marketplace</th>
@@ -465,6 +467,18 @@ export default function StockPage() {
                                   <span className="font-mono text-ink-400/40 text-[11px]"> /{item.qte_stock}</span>
                                 </td>
                                 <td className="px-3 py-3 text-right font-mono text-ink-400 whitespace-nowrap">{CFMT(item.prix_revente_unitaire)}</td>
+                                <td className="px-3 py-3 text-right font-mono whitespace-nowrap">
+                                  {item.prix_neuf_conseil ? (
+                                    <div className="flex flex-col items-end">
+                                      <span className="text-ink-400">{CFMT(item.prix_neuf_conseil)}</span>
+                                      {Number(item.prix_neuf_conseil) > Number(item.prix_achat_unitaire) && (
+                                        <span className="text-[10px] text-accent">
+                                          -{((1 - Number(item.prix_achat_unitaire) / Number(item.prix_neuf_conseil)) * 100).toFixed(0)}%
+                                        </span>
+                                      )}
+                                    </div>
+                                  ) : <span className="text-ink-400/30">—</span>}
+                                </td>
                                 <td className="px-3 py-3 text-right font-mono font-bold text-accent whitespace-nowrap">{CFMT(item.valeur_stock_restant)}</td>
                                 <td className={`px-3 py-3 text-right font-mono font-bold whitespace-nowrap ${isProfitPos ? 'text-accent' : 'text-danger'}`}>{CFMT(profit)}</td>
                                 {/* Marketplace */}
@@ -506,7 +520,7 @@ export default function StockPage() {
                           <td className="text-right text-xs text-ink-400/40 font-sans">—</td>
                           <td className="text-right font-mono font-bold text-ink-50"><CountUp end={totals.coutTotal} decimals={2} prefix="€" /></td>
                           <td className="text-center font-mono font-bold text-ink-50">{totals.qteRestante}<span className="font-mono text-ink-400/40 text-[11px]"> /{totals.qteStock}</span></td>
-                          <td className="text-right text-xs text-ink-400/40 font-sans">—</td>
+                          <td className="text-right font-mono text-ink-400/60"><CountUp end={totals.totalPnc} decimals={2} prefix="€" /></td>
                           <td className="text-right font-mono font-bold text-accent"><CountUp end={totals.totalVente} decimals={2} prefix="€" /></td>
                           <td className={`text-right font-mono font-bold ${totals.profit >= 0 ? 'text-accent' : 'text-danger'}`}><CountUp end={totals.profit} decimals={2} prefix="€" /></td>
                           <td className="text-center text-xs text-ink-400/40 font-sans">—</td>
@@ -546,6 +560,7 @@ export default function StockPage() {
                               <span className="text-ink-400">Stock: <strong className="font-mono text-ink-50">{item.qte_stock}</strong></span>
                               <span className="text-ink-400">Restant: <strong className={`font-mono ${isLow ? 'text-danger' : 'text-accent'}`}>{item.qte_restante}</strong></span>
                               <span className="text-ink-400">Coût unitaire: <strong className="font-mono text-ink-400">{CFMT(item.prix_achat_unitaire)}</strong></span>
+                              <span className="text-ink-400">PNC: {item.prix_neuf_conseil ? <strong className="font-mono text-ink-400">{CFMT(item.prix_neuf_conseil)}</strong> : <span className="text-ink-400/40">—</span>}</span>
                               <span className="text-ink-400">Coût lot: <strong className="font-mono text-ink-50">{CFMT(coutLot)}</strong></span>
                               <span className="text-ink-400">Valeur: <strong className="font-mono text-accent">{CFMT(item.valeur_stock_restant)}</strong></span>
                               <span className="text-ink-400">Profit: <strong className={`font-mono ${isProfitPos ? 'text-accent' : 'text-danger'}`}>{CFMT(profit)}</strong></span>
@@ -562,8 +577,9 @@ export default function StockPage() {
                     </AnimatePresence>
                     <div className="card-dash p-4 border border-accent/20">
                       <div className="flex justify-between items-center mb-2"><span className="text-xs text-ink-400 font-sans font-medium uppercase tracking-wider">Totaux</span></div>
-                      <div className="grid grid-cols-3 gap-2 text-xs">
+                      <div className="grid grid-cols-4 gap-2 text-xs">
                         <div><span className="text-ink-400">Coût lots</span><p className="font-mono font-bold text-ink-50"><CountUp end={totals.coutTotal} decimals={2} prefix="€" /></p></div>
+                        <div><span className="text-ink-400">PNC</span><p className="font-mono text-ink-400/60"><CountUp end={totals.totalPnc} decimals={2} prefix="€" /></p></div>
                         <div><span className="text-ink-400">Vente</span><p className="font-mono font-bold text-accent"><CountUp end={totals.totalVente} decimals={2} prefix="€" /></p></div>
                         <div><span className="text-ink-400">Profit</span><p className={`font-mono font-bold ${totals.profit >= 0 ? 'text-accent' : 'text-danger'}`}><CountUp end={totals.profit} decimals={2} prefix="€" /></p></div>
                       </div>

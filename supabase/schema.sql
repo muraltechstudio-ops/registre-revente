@@ -95,10 +95,16 @@ select
   coalesce(sum(v.qte_vendue), 0)::integer                                         as qte_vendue,
   (s.qte_stock - coalesce(sum(v.qte_vendue), 0))::integer                         as qte_restante,
   s.prix_revente_unitaire,
-  ((s.qte_stock - coalesce(sum(v.qte_vendue), 0)) * s.prix_revente_unitaire)::numeric(10,2) as valeur_stock_restant
+  ((s.qte_stock - coalesce(sum(v.qte_vendue), 0)) * s.prix_revente_unitaire)::numeric(10,2) as valeur_stock_restant,
+  s.plateforme_conseillee,
+  s.date_reception,
+  s.total_recu,
+  s.photo_url,
+  s.prix_neuf_conseil
 from revente_stock s
 left join revente_ventes v on v.stock_id = s.id
-group by s.id, s.user_id, s.produit, s.categorie, s.prix_achat_unitaire, s.qte_stock, s.prix_revente_unitaire;
+group by s.id, s.user_id, s.produit, s.categorie, s.prix_achat_unitaire, s.qte_stock, s.prix_revente_unitaire,
+  s.plateforme_conseillee, s.date_reception, s.total_recu, s.photo_url, s.prix_neuf_conseil;
 
 -- 5. Row Level Security -------------------------------------------------------
 
