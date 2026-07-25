@@ -92,7 +92,7 @@ export default function StockModal({ isOpen, onClose, onSave, item }) {
     } catch (err) {
       console.error('StockModal error:', err)
       toast.error('MODAL_ERR: ' + (err?.message || String(err) || 'Erreur'))
-    finally { setLoading(false) }
+    } finally { setLoading(false) }
   }
 
   return (
