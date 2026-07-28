@@ -310,6 +310,13 @@ export default function StockPage() {
                     {nom:'Pharao Cedar', pu:60.18, qte:1, cat:'Moto'},
                     {nom:'31 bas maillots', pu:0.34, qte:31, cat:'Mode'},
                     {nom:'85 bikinis', pu:1.16, qte:85, cat:'Mode'},
+                    {nom:'Sweats Jennyfer 10', pu:1.80, qte:20, cat:'Mode'},
+                    {nom:'Sweats Jennyfer 9', pu:1.80, qte:20, cat:'Mode'},
+                    {nom:'Pimkie', pu:1.20, qte:69, cat:'Mode'},
+                    {nom:'ampoules LEXMAN', pu:0.23, qte:80, cat:'Autre'},
+                    {nom:'colliers et laisses chiens', pu:0.29, qte:250, cat:'Bijoux'},
+                    {nom:'foutas', pu:1.44, qte:25, cat:'Mode'},
+                    {nom:'tongs', pu:0.54, qte:256, cat:'Mode'},
                   ]
                   let ok = 0, fails = []
                   const used = new Set()
